@@ -1,0 +1,231 @@
+version: '3.9'
+
+# ==============================================
+# MOTACARE — Local Development Environment
+# Run: docker-compose up -d
+# ==============================================
+
+networks:
+  motacare-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  pgadmin-data:
+
+services:
+
+  # ============================================
+  # INFRASTRUCTURE
+  # ============================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: motacare-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-motacare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-motacare_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-motacare}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - motacare-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-motacare}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: motacare-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    networks:
+      - motacare-network
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Database admin UI (dev only)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: motacare-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@motacare.dev
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - '5050:80'
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - motacare-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ============================================
+  # APPLICATION SERVICES
+  # ============================================
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: infra/docker/auth-service.Dockerfile
+      target: development
+    container_name: motacare-auth
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: ${AUTH_SERVICE_PORT:-3001}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
+      BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-12}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-motacare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-motacare_dev_password}
+      POSTGRES_DB: ${AUTH_DB_NAME:-motacare_auth}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - '3001:3001'
+    volumes:
+      - ./apps/auth-service:/app/apps/auth-service
+      - ./packages:/app/packages
+      - /app/node_modules
+      - /app/apps/auth-service/node_modules
+    networks:
+      - motacare-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  vehicle-service:
+    build:
+      context: .
+      dockerfile: infra/docker/vehicle-service.Dockerfile
+      target: development
+    container_name: motacare-vehicle
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: ${VEHICLE_SERVICE_PORT:-3002}
+      VEHICLE_HASH_SECRET: ${VEHICLE_HASH_SECRET}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-motacare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-motacare_dev_password}
+      POSTGRES_DB: ${VEHICLE_DB_NAME:-motacare_vehicles}
+      AUTH_SERVICE_URL: http://auth-service:3001
+    ports:
+      - '3002:3002'
+    volumes:
+      - ./apps/vehicle-service:/app/apps/vehicle-service
+      - ./packages:/app/packages
+      - /app/node_modules
+      - /app/apps/vehicle-service/node_modules
+    networks:
+      - motacare-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+
+  inspection-service:
+    build:
+      context: .
+      dockerfile: infra/docker/inspection-service.Dockerfile
+      target: development
+    container_name: motacare-inspection
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: ${INSPECTION_SERVICE_PORT:-3003}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-motacare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-motacare_dev_password}
+      POSTGRES_DB: ${INSPECTION_DB_NAME:-motacare_inspections}
+      AUTH_SERVICE_URL: http://auth-service:3001
+      VEHICLE_SERVICE_URL: http://vehicle-service:3002
+    ports:
+      - '3003:3003'
+    volumes:
+      - ./apps/inspection-service:/app/apps/inspection-service
+      - ./packages:/app/packages
+      - /app/node_modules
+      - /app/apps/inspection-service/node_modules
+    networks:
+      - motacare-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      vehicle-service:
+        condition: service_started
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: infra/docker/api-gateway.Dockerfile
+      target: development
+    container_name: motacare-gateway
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: ${API_GATEWAY_PORT:-3000}
+      AUTH_SERVICE_URL: http://auth-service:3001
+      VEHICLE_SERVICE_URL: http://vehicle-service:3002
+      INSPECTION_SERVICE_URL: http://inspection-service:3003
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./apps/api-gateway:/app/apps/api-gateway
+      - ./packages:/app/packages
+      - /app/node_modules
+    networks:
+      - motacare-network
+    depends_on:
+      - auth-service
+      - vehicle-service
+      - inspection-service
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      target: development
+    container_name: motacare-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+    ports:
+      - '3005:3005'
+    volumes:
+      - ./apps/web:/app/apps/web
+      - ./packages:/app/packages
+      - /app/node_modules
+      - /app/apps/web/node_modules
+    networks:
+      - motacare-network
+    depends_on:
+      - api-gateway
