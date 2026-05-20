@@ -12,6 +12,7 @@ WORKDIR /app
 COPY package.json turbo.json ./
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/shared-utils/package.json ./packages/shared-utils/
+COPY packages/ui-components/package.json ./packages/ui-components/
 COPY apps/web/package.json ./apps/web/
 
 RUN npm install --workspace=apps/web --workspace=packages/shared-types --workspace=packages/shared-utils
@@ -22,6 +23,7 @@ WORKDIR /app
 
 COPY packages/shared-types ./packages/shared-types
 COPY packages/shared-utils ./packages/shared-utils
+COPY packages/ui-components/package.json ./packages/ui-components/
 COPY apps/web ./apps/web
 
 EXPOSE 3001
@@ -34,6 +36,7 @@ WORKDIR /app
 
 COPY packages/shared-types ./packages/shared-types
 COPY packages/shared-utils ./packages/shared-utils
+COPY packages/ui-components/package.json ./packages/ui-components/
 COPY apps/web ./apps/web
 
 RUN npm run build --workspace=packages/shared-types
@@ -52,6 +55,7 @@ COPY --from=builder /app/apps/web/dist ./dist
 COPY --from=builder /app/apps/web/package.json ./
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
+COPY packages/ui-components/package.json ./packages/ui-components/
 
 RUN npm install --omit=dev
 
