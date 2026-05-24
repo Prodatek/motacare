@@ -217,7 +217,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: development
-      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NEXT_PUBLIC_API_URL: http://motacare-gateway:3000
     ports:
       - '3005:3005'
     volumes:
