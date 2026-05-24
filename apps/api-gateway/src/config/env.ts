@@ -1,3 +1,4 @@
+// Note: zod is not in api-gateway package.json by default — added below
 import { z } from 'zod';
 
 // ============================================================

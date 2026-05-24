@@ -1,43 +1,109 @@
-import { z } from 'zod';
+import { pgTable, uuid, varchar, text, boolean, timestamp, pgEnum, index } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
 
 // ============================================================
-// ENV VALIDATION
-// The app will throw immediately on startup if any required
-// environment variable is missing or has the wrong type.
-// This prevents silent failures in production.
+// ENUMS
 // ============================================================
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'staging', 'production', 'test']).default('development'),
-  PORT: z.coerce.number().default(3001),
+export const userRoleEnum = pgEnum('user_role', ['OWNER', 'FIXER', 'ADMIN']);
 
-  // JWT
-  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
-  JWT_EXPIRES_IN: z.string().default('15m'),
-  REFRESH_TOKEN_EXPIRES_IN: z.string().default('7d'),
+export const subscriptionTierEnum = pgEnum('subscription_tier', ['FREE', 'PRO', 'WORKSHOP']);
 
-  // Bcrypt
-  BCRYPT_SALT_ROUNDS: z.coerce.number().default(12),
+// ============================================================
+// USERS TABLE
+// ============================================================
 
-  // PostgreSQL
-  POSTGRES_HOST: z.string().default('localhost'),
-  POSTGRES_PORT: z.coerce.number().default(5432),
-  POSTGRES_USER: z.string(),
-  POSTGRES_PASSWORD: z.string(),
-  POSTGRES_DB: z.string(),
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
 
-  // Redis
-  REDIS_HOST: z.string().default('localhost'),
-  REDIS_PORT: z.coerce.number().default(6379),
-});
+    // Identity
+    email: varchar('email', { length: 255 }).notNull().unique(),
+    passwordHash: varchar('password_hash', { length: 255 }).notNull(),
 
-const parsed = envSchema.safeParse(process.env);
+    // Profile
+    firstName: varchar('first_name', { length: 100 }).notNull(),
+    lastName: varchar('last_name', { length: 100 }).notNull(),
+    phone: varchar('phone', { length: 20 }),
 
-if (!parsed.success) {
-  console.error('❌ Invalid environment variables:');
-  console.error(parsed.error.flatten().fieldErrors);
-  process.exit(1);
-}
+    // Role & subscription
+    role: userRoleEnum('role').notNull().default('OWNER'),
+    subscriptionTier: subscriptionTierEnum('subscription_tier').notNull().default('FREE'),
 
-export const env = parsed.data;
-export type Env = typeof env;
+    // Fixer-specific fields
+    workshopName: varchar('workshop_name', { length: 200 }),
+    workshopAddress: text('workshop_address'),
+
+    // Account state
+    isActive: boolean('is_active').notNull().default(true),
+    isEmailVerified: boolean('is_email_verified').notNull().default(false),
+    emailVerificationToken: varchar('email_verification_token', { length: 255 }),
+
+    // Timestamps
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    lastLoginAt: timestamp('last_login_at'),
+  },
+  (table) => ({
+    emailIdx: index('users_email_idx').on(table.email),
+    roleIdx: index('users_role_idx').on(table.role),
+  }),
+);
+
+// ============================================================
+// REFRESH TOKENS TABLE
+// Stored in DB so we can revoke them (logout, security events)
+// ============================================================
+
+export const refreshTokens = pgTable(
+  'refresh_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    token: varchar('token', { length: 512 }).notNull().unique(),
+    isRevoked: boolean('is_revoked').notNull().default(false),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+
+    // Track device/session for security
+    userAgent: text('user_agent'),
+    ipAddress: varchar('ip_address', { length: 45 }),
+  },
+  (table) => ({
+    userIdIdx: index('refresh_tokens_user_id_idx').on(table.userId),
+    tokenIdx: index('refresh_tokens_token_idx').on(table.token),
+  }),
+);
+
+// ============================================================
+// TYPES — Inferred from schema (used across the service)
+// ============================================================
+
+// ============================================================
+// RELATIONS — required for Drizzle `with:` queries
+// ============================================================
+
+export const usersRelations = relations(users, ({ many }) => ({
+  refreshTokens: many(refreshTokens),
+}));
+
+export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [refreshTokens.userId],
+    references: [users.id],
+  }),
+}));
+
+// ============================================================
+// INFERRED TYPES
+// ============================================================
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type RefreshToken = typeof refreshTokens.$inferSelect;
+export type NewRefreshToken = typeof refreshTokens.$inferInsert;
+export type UserRole = 'OWNER' | 'FIXER' | 'ADMIN';
+export type SubscriptionTier = 'FREE' | 'PRO' | 'WORKSHOP';

@@ -9,6 +9,7 @@ import {
   index,
   unique,
 } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
 
 // ============================================================
 // ENUMS
@@ -112,6 +113,21 @@ export const vehicleOwnershipHistory = pgTable(
     vehicleIdx: index('ownership_history_vehicle_idx').on(table.vehicleId),
   }),
 );
+
+// ============================================================
+// RELATIONS
+// ============================================================
+
+export const vehiclesRelations = relations(vehicles, ({ many }) => ({
+  ownershipHistory: many(vehicleOwnershipHistory),
+}));
+
+export const vehicleOwnershipHistoryRelations = relations(vehicleOwnershipHistory, ({ one }) => ({
+  vehicle: one(vehicles, {
+    fields: [vehicleOwnershipHistory.vehicleId],
+    references: [vehicles.id],
+  }),
+}));
 
 // ============================================================
 // INFERRED TYPES

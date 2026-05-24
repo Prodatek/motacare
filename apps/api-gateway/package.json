@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "tsx": "^4.10.5",
-    "vitest": "^1.6.0"
+    "vitest": "^1.6.0",
+    "pino-pretty": "^11.0.0"
   }
 }

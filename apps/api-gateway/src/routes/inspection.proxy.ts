@@ -1,206 +1,112 @@
 import type { FastifyInstance } from 'fastify';
-import httpProxy from '@fastify/http-proxy';
 import { env } from '../config/env';
-import { AUTH_RATE_LIMIT, WRITE_RATE_LIMIT, buildRateLimitErrorResponse } from '../middleware/rate-limit';
+import { proxyRequest } from './auth.proxy';
 
 // ============================================================
-// AUTH PROXY
-//
-// Routes all /auth/* requests to the auth-service.
-// The gateway applies rate limiting here — downstream auth-service
-// also has its own limits as a second layer of defence.
-//
-// Public routes (no gateway-level auth check needed):
-//   POST /auth/register
-//   POST /auth/login
-//   POST /auth/refresh
-//   POST /auth/logout
-//
-// Protected routes (gateway verifies JWT first):
-//   GET  /auth/me
+// INSPECTION + FIX JOB PROXY
+// Routes /inspections/* and /fix-jobs/* to inspection-service.
 // ============================================================
 
-export async function registerAuthProxy(fastify: FastifyInstance) {
+export async function registerInspectionProxy(fastify: FastifyInstance) {
 
-  // ----------------------------------------------------------
-  // TIGHT rate limit on login/register (brute force protection)
-  // Applied before the proxy so abusive requests never reach
-  // the auth-service at all.
-  // ----------------------------------------------------------
-
-  fastify.register(async (instance) => {
-    // Apply tight rate limit to this scope only
-    await instance.register(
-      (await import('@fastify/rate-limit')).default,
-      {
-        max: AUTH_RATE_LIMIT.max,
-        timeWindow: AUTH_RATE_LIMIT.timeWindow,
-        keyGenerator: AUTH_RATE_LIMIT.keyGenerator,
-        errorResponseBuilder: buildRateLimitErrorResponse,
-      },
-    );
-
-    // Proxy: POST /auth/register
-    instance.post('/auth/register', {
-      schema: {
-        tags: ['Auth'],
-        summary: 'Register a new user account',
-        description: 'Proxied to auth-service. Rate limited to 10 requests per 15 minutes per IP+email.',
-        body: {
-          type: 'object',
-          required: ['email', 'password', 'firstName', 'lastName'],
-          properties: {
-            email: { type: 'string', format: 'email' },
-            password: { type: 'string', minLength: 8 },
-            firstName: { type: 'string' },
-            lastName: { type: 'string' },
-            phone: { type: 'string' },
-            role: { type: 'string', enum: ['OWNER', 'FIXER'] },
-            workshopName: { type: 'string' },
-            workshopAddress: { type: 'string' },
-          },
-        },
-      },
-    }, async (request, reply) => {
-      return proxyRequest(request, reply, `${env.AUTH_SERVICE_URL}/auth/register`, 'POST');
-    });
-
-    // Proxy: POST /auth/login
-    instance.post('/auth/login', {
-      schema: {
-        tags: ['Auth'],
-        summary: 'Login with email and password',
-        body: {
-          type: 'object',
-          required: ['email', 'password'],
-          properties: {
-            email: { type: 'string', format: 'email' },
-            password: { type: 'string' },
-          },
-        },
-      },
-    }, async (request, reply) => {
-      return proxyRequest(request, reply, `${env.AUTH_SERVICE_URL}/auth/login`, 'POST');
-    });
-
-    // Proxy: POST /auth/refresh
-    instance.post('/auth/refresh', {
-      schema: {
-        tags: ['Auth'],
-        summary: 'Refresh access token',
-      },
-    }, async (request, reply) => {
-      return proxyRequest(request, reply, `${env.AUTH_SERVICE_URL}/auth/refresh`, 'POST');
-    });
-
-    // Proxy: POST /auth/logout
-    instance.post('/auth/logout', {
-      schema: {
-        tags: ['Auth'],
-        summary: 'Logout and revoke refresh token',
-      },
-    }, async (request, reply) => {
-      return proxyRequest(request, reply, `${env.AUTH_SERVICE_URL}/auth/logout`, 'POST');
-    });
-  });
-
-  // ----------------------------------------------------------
-  // Protected auth routes — gateway verifies JWT first
-  // ----------------------------------------------------------
-
-  // GET /auth/me
-  fastify.get('/auth/me', {
+  // GET /inspections/checklist — public (any authenticated user)
+  fastify.get('/inspections/checklist', {
     onRequest: [fastify.authenticate],
-    schema: {
-      tags: ['Auth'],
-      summary: 'Get authenticated user profile',
-      security: [{ bearerAuth: [] }],
-    },
+    schema: { tags: ['Inspections'], summary: 'Get inspection checklist template', security: [{ bearerAuth: [] }] },
   }, async (request, reply) => {
-    return proxyRequest(request, reply, `${env.AUTH_SERVICE_URL}/auth/me`, 'GET');
+    return proxyRequest(request, reply, `${env.INSPECTION_SERVICE_URL}/inspections/checklist`, 'GET');
   });
 
-  // Auth service health (used by monitoring)
-  fastify.get('/auth/health', async (request, reply) => {
-    return proxyRequest(request, reply, `${env.AUTH_SERVICE_URL}/health`, 'GET');
+  // POST /inspections — create session (FIXER only)
+  fastify.post('/inspections', {
+    onRequest: [fastify.requireRole('FIXER', 'ADMIN')],
+    schema: { tags: ['Inspections'], summary: 'Start a new inspection session', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    return proxyRequest(request, reply, `${env.INSPECTION_SERVICE_URL}/inspections`, 'POST');
   });
-}
 
-// ============================================================
-// PROXY HELPER
-// Forwards the request to the upstream service and streams
-// the response back to the client, preserving:
-//   - status code
-//   - response headers (minus hop-by-hop headers)
-//   - body
-// Adds X-Gateway-* headers so downstream services can track
-// where the request originated.
-// ============================================================
+  // GET /inspections — list inspections
+  fastify.get('/inspections', {
+    onRequest: [fastify.authenticate],
+    schema: { tags: ['Inspections'], summary: 'List inspections', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const query = new URLSearchParams(request.query as any).toString();
+    return proxyRequest(request, reply, `${env.INSPECTION_SERVICE_URL}/inspections${query ? `?${query}` : ''}`, 'GET');
+  });
 
-export async function proxyRequest(
-  request: any,
-  reply: any,
-  upstreamUrl: string,
-  method: string,
-) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), env.PROXY_TIMEOUT_MS);
+  // GET /inspections/:id
+  fastify.get('/inspections/:id', {
+    onRequest: [fastify.authenticate],
+    schema: { tags: ['Inspections'], summary: 'Get inspection with checklist items', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return proxyRequest(request, reply, `${env.INSPECTION_SERVICE_URL}/inspections/${id}`, 'GET');
+  });
 
-  try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      // Forward the original authorization header downstream
-      ...(request.headers.authorization
-        ? { Authorization: request.headers.authorization }
-        : {}),
-      // Gateway metadata headers
-      'X-Gateway-Request-Id': request.id,
-      'X-Forwarded-For': request.ip,
-      'X-Forwarded-Proto': request.protocol,
-    };
+  // PATCH /inspections/:id/items — update single item
+  fastify.patch('/inspections/:id/items', {
+    onRequest: [fastify.requireRole('FIXER', 'ADMIN')],
+    schema: { tags: ['Inspections'], summary: 'Update a checklist item', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return proxyRequest(request, reply, `${env.INSPECTION_SERVICE_URL}/inspections/${id}/items`, 'PATCH');
+  });
 
-    const fetchOptions: RequestInit = {
-      method,
-      headers,
-      signal: controller.signal,
-      // Only include body for non-GET/HEAD requests
-      ...(method !== 'GET' && method !== 'HEAD' && request.body
-        ? { body: JSON.stringify(request.body) }
-        : {}),
-    };
+  // PATCH /inspections/:id/items/batch — batch update
+  fastify.patch('/inspections/:id/items/batch', {
+    onRequest: [fastify.requireRole('FIXER', 'ADMIN')],
+    schema: { tags: ['Inspections'], summary: 'Batch update checklist items', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return proxyRequest(request, reply, `${env.INSPECTION_SERVICE_URL}/inspections/${id}/items/batch`, 'PATCH');
+  });
 
-    const upstream = await fetch(upstreamUrl, fetchOptions);
+  // POST /inspections/:id/complete
+  fastify.post('/inspections/:id/complete', {
+    onRequest: [fastify.requireRole('FIXER', 'ADMIN')],
+    schema: { tags: ['Inspections'], summary: 'Complete an inspection', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return proxyRequest(request, reply, `${env.INSPECTION_SERVICE_URL}/inspections/${id}/complete`, 'POST');
+  });
 
-    // Forward response status and body
-    const data = await upstream.json();
+  // POST /inspections/:id/fix-jobs
+  fastify.post('/inspections/:id/fix-jobs', {
+    onRequest: [fastify.requireRole('FIXER', 'ADMIN')],
+    schema: { tags: ['Inspections'], summary: 'Create a fix job from inspection', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return proxyRequest(request, reply, `${env.INSPECTION_SERVICE_URL}/inspections/${id}/fix-jobs`, 'POST');
+  });
 
-    // Strip internal headers before forwarding to client
-    reply
-      .status(upstream.status)
-      .header('X-Served-By', 'motacare-gateway')
-      .send(data);
+  // ──────────────────────────────────────────────────────────
+  // FIX JOBS
+  // ──────────────────────────────────────────────────────────
 
-  } catch (error: any) {
-    if (error.name === 'AbortError') {
-      return reply.status(504).send({
-        statusCode: 504,
-        error: 'Gateway Timeout',
-        message: 'The upstream service did not respond in time',
-      });
-    }
+  // GET /fix-jobs
+  fastify.get('/fix-jobs', {
+    onRequest: [fastify.authenticate],
+    schema: { tags: ['Fix Jobs'], summary: 'List fix jobs', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const query = new URLSearchParams(request.query as any).toString();
+    return proxyRequest(request, reply, `${env.INSPECTION_SERVICE_URL}/fix-jobs${query ? `?${query}` : ''}`, 'GET');
+  });
 
-    request.log.error({
-      event: 'proxy_error',
-      upstream: upstreamUrl,
-      error: error.message,
-    });
+  // GET /fix-jobs/:id
+  fastify.get('/fix-jobs/:id', {
+    onRequest: [fastify.authenticate],
+    schema: { tags: ['Fix Jobs'], summary: 'Get a fix job', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return proxyRequest(request, reply, `${env.INSPECTION_SERVICE_URL}/fix-jobs/${id}`, 'GET');
+  });
 
-    return reply.status(502).send({
-      statusCode: 502,
-      error: 'Bad Gateway',
-      message: 'The upstream service is currently unavailable',
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
+  // PATCH /fix-jobs/:id
+  fastify.patch('/fix-jobs/:id', {
+    onRequest: [fastify.requireRole('FIXER', 'ADMIN')],
+    schema: { tags: ['Fix Jobs'], summary: 'Update fix job status', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return proxyRequest(request, reply, `${env.INSPECTION_SERVICE_URL}/fix-jobs/${id}`, 'PATCH');
+  });
 }

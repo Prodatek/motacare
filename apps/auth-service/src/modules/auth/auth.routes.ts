@@ -111,4 +111,44 @@ export async function authRoutes(fastify: FastifyInstance) {
     },
     (req, rep) => authController.getProfile(req, rep),
   );
+
+  // ----------------------------------------------------------
+  // INTERNAL ROUTES
+  // Only reachable inside the Docker network — not exposed publicly.
+  // Used by other services for cross-service lookups.
+  // ----------------------------------------------------------
+
+  // Used by vehicle-service during ownership transfer
+  fastify.post(
+    '/internal/user-by-email',
+    {
+      schema: {
+        tags: ['Internal'],
+        summary: 'Internal: look up a user ID by email address',
+        hide: true, // Hidden from public Swagger docs
+        body: {
+          type: 'object',
+          required: ['email'],
+          properties: { email: { type: 'string', format: 'email' } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { email } = request.body as { email: string };
+      const { eq } = await import('drizzle-orm');
+      const { db } = await import('../../db');
+      const { users } = await import('../../db/schema');
+
+      const user = await db.query.users.findFirst({
+        where: eq(users.email, email.toLowerCase()),
+        columns: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true },
+      });
+
+      if (!user || !user.isActive) {
+        return reply.status(404).send({ statusCode: 404, error: 'Not Found', message: 'User not found' });
+      }
+
+      return reply.status(200).send({ statusCode: 200, data: user });
+    },
+  );
 }

@@ -1,206 +1,83 @@
 import type { FastifyInstance } from 'fastify';
-import httpProxy from '@fastify/http-proxy';
 import { env } from '../config/env';
-import { AUTH_RATE_LIMIT, WRITE_RATE_LIMIT, buildRateLimitErrorResponse } from '../middleware/rate-limit';
+import { WRITE_RATE_LIMIT, READ_RATE_LIMIT, buildRateLimitErrorResponse } from '../middleware/rate-limit';
+import { proxyRequest } from './auth.proxy';
 
 // ============================================================
-// AUTH PROXY
+// VEHICLE PROXY
+// Routes all /vehicles/* requests to vehicle-service.
 //
-// Routes all /auth/* requests to the auth-service.
-// The gateway applies rate limiting here — downstream auth-service
-// also has its own limits as a second layer of defence.
-//
-// Public routes (no gateway-level auth check needed):
-//   POST /auth/register
-//   POST /auth/login
-//   POST /auth/refresh
-//   POST /auth/logout
-//
-// Protected routes (gateway verifies JWT first):
-//   GET  /auth/me
+// Role matrix enforced at gateway level:
+//   POST   /vehicles         → OWNER only (register)
+//   GET    /vehicles         → OWNER only (list own)
+//   GET    /vehicles/:hash   → any authenticated user
+//   PATCH  /vehicles/:hash   → OWNER only
+//   DELETE /vehicles/:hash   → OWNER only
+//   POST   /vehicles/:hash/transfer → OWNER only
+//   GET    /vehicles/:hash/history  → authenticated
 // ============================================================
 
-export async function registerAuthProxy(fastify: FastifyInstance) {
+export async function registerVehicleProxy(fastify: FastifyInstance) {
 
-  // ----------------------------------------------------------
-  // TIGHT rate limit on login/register (brute force protection)
-  // Applied before the proxy so abusive requests never reach
-  // the auth-service at all.
-  // ----------------------------------------------------------
-
-  fastify.register(async (instance) => {
-    // Apply tight rate limit to this scope only
-    await instance.register(
-      (await import('@fastify/rate-limit')).default,
-      {
-        max: AUTH_RATE_LIMIT.max,
-        timeWindow: AUTH_RATE_LIMIT.timeWindow,
-        keyGenerator: AUTH_RATE_LIMIT.keyGenerator,
-        errorResponseBuilder: buildRateLimitErrorResponse,
-      },
-    );
-
-    // Proxy: POST /auth/register
-    instance.post('/auth/register', {
-      schema: {
-        tags: ['Auth'],
-        summary: 'Register a new user account',
-        description: 'Proxied to auth-service. Rate limited to 10 requests per 15 minutes per IP+email.',
-        body: {
-          type: 'object',
-          required: ['email', 'password', 'firstName', 'lastName'],
-          properties: {
-            email: { type: 'string', format: 'email' },
-            password: { type: 'string', minLength: 8 },
-            firstName: { type: 'string' },
-            lastName: { type: 'string' },
-            phone: { type: 'string' },
-            role: { type: 'string', enum: ['OWNER', 'FIXER'] },
-            workshopName: { type: 'string' },
-            workshopAddress: { type: 'string' },
-          },
-        },
-      },
-    }, async (request, reply) => {
-      return proxyRequest(request, reply, `${env.AUTH_SERVICE_URL}/auth/register`, 'POST');
-    });
-
-    // Proxy: POST /auth/login
-    instance.post('/auth/login', {
-      schema: {
-        tags: ['Auth'],
-        summary: 'Login with email and password',
-        body: {
-          type: 'object',
-          required: ['email', 'password'],
-          properties: {
-            email: { type: 'string', format: 'email' },
-            password: { type: 'string' },
-          },
-        },
-      },
-    }, async (request, reply) => {
-      return proxyRequest(request, reply, `${env.AUTH_SERVICE_URL}/auth/login`, 'POST');
-    });
-
-    // Proxy: POST /auth/refresh
-    instance.post('/auth/refresh', {
-      schema: {
-        tags: ['Auth'],
-        summary: 'Refresh access token',
-      },
-    }, async (request, reply) => {
-      return proxyRequest(request, reply, `${env.AUTH_SERVICE_URL}/auth/refresh`, 'POST');
-    });
-
-    // Proxy: POST /auth/logout
-    instance.post('/auth/logout', {
-      schema: {
-        tags: ['Auth'],
-        summary: 'Logout and revoke refresh token',
-      },
-    }, async (request, reply) => {
-      return proxyRequest(request, reply, `${env.AUTH_SERVICE_URL}/auth/logout`, 'POST');
-    });
-  });
-
-  // ----------------------------------------------------------
-  // Protected auth routes — gateway verifies JWT first
-  // ----------------------------------------------------------
-
-  // GET /auth/me
-  fastify.get('/auth/me', {
-    onRequest: [fastify.authenticate],
-    schema: {
-      tags: ['Auth'],
-      summary: 'Get authenticated user profile',
-      security: [{ bearerAuth: [] }],
-    },
+  // POST /vehicles — register a new vehicle (OWNER only)
+  fastify.post('/vehicles', {
+    onRequest: [fastify.requireRole('OWNER', 'ADMIN')],
+    schema: { tags: ['Vehicles'], summary: 'Register a new vehicle', security: [{ bearerAuth: [] }] },
   }, async (request, reply) => {
-    return proxyRequest(request, reply, `${env.AUTH_SERVICE_URL}/auth/me`, 'GET');
+    return proxyRequest(request, reply, `${env.VEHICLE_SERVICE_URL}/vehicles`, 'POST');
   });
 
-  // Auth service health (used by monitoring)
-  fastify.get('/auth/health', async (request, reply) => {
-    return proxyRequest(request, reply, `${env.AUTH_SERVICE_URL}/health`, 'GET');
+  // GET /vehicles — list owner's vehicles
+  fastify.get('/vehicles', {
+    onRequest: [fastify.requireRole('OWNER', 'ADMIN')],
+    schema: { tags: ['Vehicles'], summary: 'List vehicles for authenticated owner', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const query = new URLSearchParams(request.query as any).toString();
+    return proxyRequest(request, reply, `${env.VEHICLE_SERVICE_URL}/vehicles${query ? `?${query}` : ''}`, 'GET');
   });
-}
 
-// ============================================================
-// PROXY HELPER
-// Forwards the request to the upstream service and streams
-// the response back to the client, preserving:
-//   - status code
-//   - response headers (minus hop-by-hop headers)
-//   - body
-// Adds X-Gateway-* headers so downstream services can track
-// where the request originated.
-// ============================================================
+  // GET /vehicles/:hash — get single vehicle
+  fastify.get('/vehicles/:hash', {
+    onRequest: [fastify.authenticate],
+    schema: { tags: ['Vehicles'], summary: 'Get vehicle by hash', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const { hash } = request.params as { hash: string };
+    return proxyRequest(request, reply, `${env.VEHICLE_SERVICE_URL}/vehicles/${hash}`, 'GET');
+  });
 
-export async function proxyRequest(
-  request: any,
-  reply: any,
-  upstreamUrl: string,
-  method: string,
-) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), env.PROXY_TIMEOUT_MS);
+  // PATCH /vehicles/:hash — update vehicle
+  fastify.patch('/vehicles/:hash', {
+    onRequest: [fastify.requireRole('OWNER', 'ADMIN')],
+    schema: { tags: ['Vehicles'], summary: 'Update vehicle details', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const { hash } = request.params as { hash: string };
+    return proxyRequest(request, reply, `${env.VEHICLE_SERVICE_URL}/vehicles/${hash}`, 'PATCH');
+  });
 
-  try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      // Forward the original authorization header downstream
-      ...(request.headers.authorization
-        ? { Authorization: request.headers.authorization }
-        : {}),
-      // Gateway metadata headers
-      'X-Gateway-Request-Id': request.id,
-      'X-Forwarded-For': request.ip,
-      'X-Forwarded-Proto': request.protocol,
-    };
+  // DELETE /vehicles/:hash — deactivate vehicle
+  fastify.delete('/vehicles/:hash', {
+    onRequest: [fastify.requireRole('OWNER', 'ADMIN')],
+    schema: { tags: ['Vehicles'], summary: 'Deactivate a vehicle', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const { hash } = request.params as { hash: string };
+    return proxyRequest(request, reply, `${env.VEHICLE_SERVICE_URL}/vehicles/${hash}`, 'DELETE');
+  });
 
-    const fetchOptions: RequestInit = {
-      method,
-      headers,
-      signal: controller.signal,
-      // Only include body for non-GET/HEAD requests
-      ...(method !== 'GET' && method !== 'HEAD' && request.body
-        ? { body: JSON.stringify(request.body) }
-        : {}),
-    };
+  // POST /vehicles/:hash/transfer — ownership transfer
+  fastify.post('/vehicles/:hash/transfer', {
+    onRequest: [fastify.requireRole('OWNER', 'ADMIN')],
+    schema: { tags: ['Vehicles'], summary: 'Transfer vehicle ownership', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const { hash } = request.params as { hash: string };
+    return proxyRequest(request, reply, `${env.VEHICLE_SERVICE_URL}/vehicles/${hash}/transfer`, 'POST');
+  });
 
-    const upstream = await fetch(upstreamUrl, fetchOptions);
-
-    // Forward response status and body
-    const data = await upstream.json();
-
-    // Strip internal headers before forwarding to client
-    reply
-      .status(upstream.status)
-      .header('X-Served-By', 'motacare-gateway')
-      .send(data);
-
-  } catch (error: any) {
-    if (error.name === 'AbortError') {
-      return reply.status(504).send({
-        statusCode: 504,
-        error: 'Gateway Timeout',
-        message: 'The upstream service did not respond in time',
-      });
-    }
-
-    request.log.error({
-      event: 'proxy_error',
-      upstream: upstreamUrl,
-      error: error.message,
-    });
-
-    return reply.status(502).send({
-      statusCode: 502,
-      error: 'Bad Gateway',
-      message: 'The upstream service is currently unavailable',
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
+  // GET /vehicles/:hash/history — ownership history
+  fastify.get('/vehicles/:hash/history', {
+    onRequest: [fastify.authenticate],
+    schema: { tags: ['Vehicles'], summary: 'Get vehicle ownership history', security: [{ bearerAuth: [] }] },
+  }, async (request, reply) => {
+    const { hash } = request.params as { hash: string };
+    return proxyRequest(request, reply, `${env.VEHICLE_SERVICE_URL}/vehicles/${hash}/history`, 'GET');
+  });
 }

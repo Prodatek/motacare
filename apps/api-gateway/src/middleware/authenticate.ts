@@ -1,21 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 
-// ============================================================
-// GATEWAY AUTHENTICATE MIDDLEWARE
-//
-// The gateway optionally verifies JWTs on certain routes.
-// Most proxied routes rely on downstream services to verify —
-// but the gateway can be a first line of defence for clearly
-// unauthenticated requests (saves the round-trip downstream).
-//
-// authenticate     → hard block: 401 if no valid token
-// optionalAuth     → soft check: extracts user if token present, proceeds either way
-// requireRole      → role guard: 403 if wrong role
-// ============================================================
-
 export async function registerAuthMiddleware(fastify: FastifyInstance) {
-
-  // Hard auth check — must have a valid JWT
   fastify.decorate(
     'authenticate',
     async function (request: FastifyRequest, reply: FastifyReply) {
@@ -31,19 +16,13 @@ export async function registerAuthMiddleware(fastify: FastifyInstance) {
     },
   );
 
-  // Soft auth — extracts user from token if present, never blocks
   fastify.decorate(
     'optionalAuth',
     async function (request: FastifyRequest, _reply: FastifyReply) {
-      try {
-        await request.jwtVerify();
-      } catch {
-        // No token or invalid — proceed as anonymous
-      }
+      try { await request.jwtVerify(); } catch { /* anonymous — proceed */ }
     },
   );
 
-  // Role guard factory
   fastify.decorate(
     'requireRole',
     function (...roles: string[]) {
@@ -51,7 +30,6 @@ export async function registerAuthMiddleware(fastify: FastifyInstance) {
         try {
           await request.jwtVerify();
           const user = request.user as { sub: string; role: string };
-
           if (!roles.includes(user.role)) {
             return reply.status(403).send({
               statusCode: 403,
