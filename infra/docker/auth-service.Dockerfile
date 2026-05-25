@@ -14,6 +14,7 @@ COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/shared-utils/package.json ./packages/shared-utils/
 COPY apps/auth-service/package.json ./apps/auth-service/
 
+
 RUN npm install --workspace=apps/auth-service --workspace=packages/shared-types --workspace=packages/shared-utils
 
 # --- Development Stage ---
