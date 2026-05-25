@@ -1,4 +1,39 @@
+import { z } from 'zod';
 import { pgTable, uuid, varchar, text, boolean, timestamp, pgEnum, index } from 'drizzle-orm/pg-core';
+
+// ============================================================
+// REQUEST VALIDATION SCHEMAS
+// ============================================================
+
+export const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  firstName: z.string().nonempty(),
+  lastName: z.string().nonempty(),
+  phone: z.string().optional(),
+  role: z.enum(['OWNER', 'FIXER', 'ADMIN']).optional().default('OWNER'),
+  workshopName: z.string().optional(),
+  workshopAddress: z.string().optional(),
+});
+
+export const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(1),
+});
+
+export const changePasswordSchema = z.object({
+  oldPassword: z.string().min(8),
+  newPassword: z.string().min(8),
+});
+
+export type RegisterInput = z.infer<typeof registerSchema>;
+export type LoginInput = z.infer<typeof loginSchema>;
+export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
 // ============================================================
 // ENUMS
