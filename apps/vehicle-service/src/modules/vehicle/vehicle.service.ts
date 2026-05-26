@@ -269,7 +269,17 @@ export class VehicleService {
   // Returns minimal data needed to verify a vehicle exists
   // ----------------------------------------------------------
 
-  async lookupByHash(hash: string): Promise<{ id: string; hash: string; ownerId: string; make: string; model: string; year: number } | null> {
+  async lookupByHash(hash: string): Promise<{
+    id: string;
+    hash: string;
+    ownerId: string;
+    make: string;
+    model: string;
+    year: number;
+    fuelType: string;
+    transmissionType: string;
+    engineCapacity: string | null;
+  } | null> {
     const vehicle = await db.query.vehicles.findFirst({
       where: eq(vehicles.hash, hash),
       columns: {
@@ -279,6 +289,9 @@ export class VehicleService {
         make: true,
         model: true,
         year: true,
+        fuelType: true,
+        transmissionType: true,
+        engineCapacity: true,
       },
     });
 

@@ -80,6 +80,7 @@ export async function registerAuthProxy(fastify: FastifyInstance) {
         },
       },
     }, async (request, reply) => {
+      console.log('Authorization header:', request.headers.authorization?.slice(0, 30));
       return proxyRequest(request, reply, `${env.AUTH_SERVICE_URL}/auth/login`, 'POST');
     });
 

@@ -16,6 +16,9 @@ const envSchema = z.object({
   // Internal service URLs
   AUTH_SERVICE_URL: z.string().url().default('http://localhost:3001'),
   VEHICLE_SERVICE_URL: z.string().url().default('http://localhost:3002'),
+
+   // Anthropic — optional: if missing, falls back to static checklist
+  ANTHROPIC_API_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

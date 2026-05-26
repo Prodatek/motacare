@@ -167,6 +167,7 @@ services:
       POSTGRES_DB: ${INSPECTION_DB_NAME:-motacare_inspections}
       AUTH_SERVICE_URL: http://auth-service:3001
       VEHICLE_SERVICE_URL: http://vehicle-service:3002
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - '3003:3003'
     volumes:

@@ -8,6 +8,11 @@ import { ALL_CHECK_IDS } from './checklist';
 export const createInspectionSchema = z.object({
   vehicleHash: z.string().length(64, 'Invalid vehicle hash'),
   mileageAtInspection: z.number().int().min(0, 'Mileage cannot be negative'),
+  // Phase 2: owner-reported symptoms and fixer priority areas
+  reportedSymptoms: z.array(z.string().max(200)).max(10).optional(),
+  priorityAreas: z.array(
+    z.enum(['engine', 'brakes', 'tyres', 'electrical', 'fluids', 'transmission', 'body', 'exhaust'])
+  ).optional(),
 });
 
 // ============================================================
