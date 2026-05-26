@@ -127,6 +127,7 @@ services:
       NODE_ENV: development
       PORT: ${VEHICLE_SERVICE_PORT:-3002}
       VEHICLE_HASH_SECRET: ${VEHICLE_HASH_SECRET}
+      JWT_SECRET: ${JWT_SECRET}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-motacare}
@@ -160,6 +161,7 @@ services:
       PORT: ${INSPECTION_SERVICE_PORT:-3003}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
+      JWT_SECRET: ${JWT_SECRET}
       POSTGRES_USER: ${POSTGRES_USER:-motacare}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-motacare_dev_password}
       POSTGRES_DB: ${INSPECTION_DB_NAME:-motacare_inspections}
@@ -192,6 +194,7 @@ services:
     environment:
       NODE_ENV: development
       PORT: ${API_GATEWAY_PORT:-3000}
+      JWT_SECRET: ${JWT_SECRET}
       AUTH_SERVICE_URL: http://auth-service:3001
       VEHICLE_SERVICE_URL: http://vehicle-service:3002
       INSPECTION_SERVICE_URL: http://inspection-service:3003
@@ -217,7 +220,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: development
-      NEXT_PUBLIC_API_URL: http://motacare-auth:3001
+      NEXT_PUBLIC_API_URL: http://api-gateway:3000
     ports:
       - '3005:3005'
     volumes:
