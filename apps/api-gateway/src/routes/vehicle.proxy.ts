@@ -18,11 +18,52 @@ import { proxyRequest } from './auth.proxy';
 // ============================================================
 
 export async function registerVehicleProxy(fastify: FastifyInstance) {
+  const vehicleBodySchema = {
+    type: 'object',
+    required: [
+      'vin',
+      'licensePlate',
+      'make',
+      'model',
+      'year',
+      'fuelType',
+      'transmissionType',
+      'mileageAtRegistration',
+    ],
+    properties: {
+      vin: { type: 'string', minLength: 17, maxLength: 17, pattern: '^[A-HJ-NPR-Z0-9]{17}$' },
+      licensePlate: { type: 'string', minLength: 2, maxLength: 20 },
+      make: { type: 'string', minLength: 1, maxLength: 100 },
+      model: { type: 'string', minLength: 1, maxLength: 100 },
+      year: { type: 'integer', minimum: 1900, maximum: new Date().getFullYear() + 1 },
+      color: { type: 'string', maxLength: 50 },
+      trim: { type: 'string', maxLength: 100 },
+      fuelType: { type: 'string', enum: ['PETROL', 'DIESEL', 'ELECTRIC', 'HYBRID', 'CNG', 'LPG'] },
+      transmissionType: { type: 'string', enum: ['MANUAL', 'AUTOMATIC', 'CVT'] },
+      engineCapacity: { type: 'string', maxLength: 20 },
+      mileageAtRegistration: { type: 'integer', minimum: 0 },
+    },
+  } as const;
+
+  const transferBodySchema = {
+    type: 'object',
+    required: ['newOwnerEmail', 'mileageAtTransfer'],
+    properties: {
+      newOwnerEmail: { type: 'string', format: 'email' },
+      mileageAtTransfer: { type: 'integer', minimum: 0 },
+      notes: { type: 'string', maxLength: 500 },
+    },
+  } as const;
 
   // POST /vehicles — register a new vehicle (OWNER only)
   fastify.post('/vehicles', {
     onRequest: [fastify.requireRole('OWNER', 'ADMIN')],
-    schema: { tags: ['Vehicles'], summary: 'Register a new vehicle', security: [{ bearerAuth: [] }] },
+    schema: {
+      tags: ['Vehicles'],
+      summary: 'Register a new vehicle',
+      security: [{ bearerAuth: [] }],
+      body: vehicleBodySchema,
+    },
   }, async (request, reply) => {
     return proxyRequest(request, reply, `${env.VEHICLE_SERVICE_URL}/vehicles`, 'POST');
   });
@@ -48,7 +89,22 @@ export async function registerVehicleProxy(fastify: FastifyInstance) {
   // PATCH /vehicles/:hash — update vehicle
   fastify.patch('/vehicles/:hash', {
     onRequest: [fastify.requireRole('OWNER', 'ADMIN')],
-    schema: { tags: ['Vehicles'], summary: 'Update vehicle details', security: [{ bearerAuth: [] }] },
+    schema: {
+      tags: ['Vehicles'],
+      summary: 'Update vehicle details',
+      security: [{ bearerAuth: [] }],
+      body: {
+        type: 'object',
+        properties: {
+          licensePlate: { type: 'string', minLength: 2, maxLength: 20 },
+          color: { type: 'string', maxLength: 50 },
+          trim: { type: 'string', maxLength: 100 },
+          fuelType: { type: 'string', enum: ['PETROL', 'DIESEL', 'ELECTRIC', 'HYBRID', 'CNG', 'LPG'] },
+          transmissionType: { type: 'string', enum: ['MANUAL', 'AUTOMATIC', 'CVT'] },
+          engineCapacity: { type: 'string', maxLength: 20 },
+        },
+      },
+    },
   }, async (request, reply) => {
     const { hash } = request.params as { hash: string };
     return proxyRequest(request, reply, `${env.VEHICLE_SERVICE_URL}/vehicles/${hash}`, 'PATCH');
@@ -66,7 +122,12 @@ export async function registerVehicleProxy(fastify: FastifyInstance) {
   // POST /vehicles/:hash/transfer — ownership transfer
   fastify.post('/vehicles/:hash/transfer', {
     onRequest: [fastify.requireRole('OWNER', 'ADMIN')],
-    schema: { tags: ['Vehicles'], summary: 'Transfer vehicle ownership', security: [{ bearerAuth: [] }] },
+    schema: {
+      tags: ['Vehicles'],
+      summary: 'Transfer vehicle ownership',
+      security: [{ bearerAuth: [] }],
+      body: transferBodySchema,
+    },
   }, async (request, reply) => {
     const { hash } = request.params as { hash: string };
     return proxyRequest(request, reply, `${env.VEHICLE_SERVICE_URL}/vehicles/${hash}/transfer`, 'POST');

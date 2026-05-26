@@ -28,11 +28,7 @@ export const registerVehicleSchema = z.object({
     .transform((v) => v.toUpperCase().trim()),
   make: z.string().min(1).max(100),
   model: z.string().min(1).max(100),
-  year: z
-    .coerce.number()
-    .int()
-    .min(1900, 'Year must be 1900 or later')
-    .max(currentYear + 1, `Year cannot exceed ${currentYear + 1}`),
+  year: z.coerce.number().int().min(1900, 'Year must be 1900 or later').max(currentYear + 1, `Year cannot exceed ${currentYear + 1}`),
   color: z.string().max(50).optional(),
   trim: z.string().max(100).optional(),
   fuelType: z.enum(['PETROL', 'DIESEL', 'ELECTRIC', 'HYBRID', 'CNG', 'LPG']),
