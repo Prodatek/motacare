@@ -101,6 +101,9 @@ export function getAccessToken(): string | null {
 export function clearTokens() {
   _accessToken = null;
   localStorage.removeItem('mc_refresh');
+  if (typeof document !== 'undefined') {
+    document.cookie = 'mc_session=; path=/; max-age=0; SameSite=Lax';
+  }
 }
 
 export function saveRefreshToken(token: string) {

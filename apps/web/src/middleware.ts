@@ -34,11 +34,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Authenticated user hitting login/register → send to dashboard
-  if (isAuthRoute && hasSession) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
-
+  // Authenticated user hitting login/register → allow the page to load.
+  // The client can verify the session and redirect if the user is truly signed in.
   return NextResponse.next();
 }
 
