@@ -29,7 +29,7 @@ export const registerVehicleSchema = z.object({
   make: z.string().min(1).max(100),
   model: z.string().min(1).max(100),
   year: z
-    .number()
+    .coerce.number()
     .int()
     .min(1900, 'Year must be 1900 or later')
     .max(currentYear + 1, `Year cannot exceed ${currentYear + 1}`),
@@ -39,7 +39,7 @@ export const registerVehicleSchema = z.object({
   transmissionType: z.enum(['MANUAL', 'AUTOMATIC', 'CVT']),
   engineCapacity: z.string().max(20).optional(),
   engineCode: z.string().max(50).optional(),
-  mileageAtRegistration: z.number().int().min(0).default(0),
+  mileageAtRegistration: z.coerce.number().int().min(0).default(0),
 });
 
 // ============================================================

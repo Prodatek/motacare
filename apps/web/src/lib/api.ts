@@ -54,13 +54,20 @@ async function request<T>(
     headers,
   });
 
-  // Handle 401 — try to refresh token once, then redirect to login
+  // Handle 401 — refresh once, except when calling /auth/refresh itself.
   if (response.status === 401) {
+    if (path === '/auth/refresh') {
+      clearTokens();
+      window.location.href = '/login';
+      throw new ApiClientError(401, 'Unauthorized', 'Session expired');
+    }
+
     const refreshed = await tryRefreshToken();
     if (refreshed) {
       // Retry original request with new token
       return request<T>(path, options);
     }
+
     // Refresh failed — boot to login
     clearTokens();
     window.location.href = '/login';
@@ -168,6 +175,14 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
+
+  refresh: () => {
+    const refreshToken = getRefreshToken();
+    return request<TokenPair>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken }),
+    });
+  },
 
   logout: (refreshToken: string) =>
     request<void>('/auth/logout', {

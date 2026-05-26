@@ -61,25 +61,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // Exchange refresh token for a new access token
-      const { authApi: api, setAccessToken: set, saveRefreshToken: save } = await import('./api');
-      const response = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
+      const tokens = await authApi.refresh();
+      setAccessToken(tokens.accessToken);
+      saveRefreshToken(tokens.refreshToken);
+      document.cookie = 'mc_session=1; path=/; max-age=604800; SameSite=Lax';
 
-      if (!response.ok) {
-        clearTokens();
-        setState({ user: null, isLoading: false, isAuthenticated: false });
-        return;
-      }
-
-      const data = await response.json();
-      setAccessToken(data.data.accessToken);
-      saveRefreshToken(data.data.refreshToken);
-
-      // Fetch user profile
       const user = await authApi.me();
       setState({ user, isLoading: false, isAuthenticated: true });
     } catch {

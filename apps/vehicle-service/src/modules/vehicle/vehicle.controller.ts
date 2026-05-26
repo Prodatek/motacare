@@ -24,6 +24,16 @@ export class VehicleController {
   async register(request: FastifyRequest, reply: FastifyReply) {
     const parsed = registerVehicleSchema.safeParse(request.body);
     if (!parsed.success) {
+      try {
+        request.log?.warn({
+          event: 'validation_error',
+          route: '/vehicles',
+          body: request.body,
+          errors: parsed.error.flatten().fieldErrors,
+        }, 'Register vehicle validation failed');
+      } catch {
+        // best-effort logging
+      }
       return reply.status(400).send({
         statusCode: 400,
         error: 'Validation Error',
