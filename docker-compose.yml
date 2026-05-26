@@ -185,7 +185,10 @@ services:
         condition: service_started
 
   fix-job-service:
-    image: node:18-alpine
+    build:
+      context: .
+      dockerfile: infra/docker/fix-job-service.Dockerfile
+      target: development
     container_name: motacare-fix-job
     restart: unless-stopped
     environment:
@@ -194,10 +197,9 @@ services:
     ports:
       - '3010:3010'
     volumes:
-      - ./apps/fix-job-service:/app
+      - ./apps/fix-job-service:/app/apps/fix-job-service
+      - ./packages:/app/packages
       - /app/node_modules
-    working_dir: /app
-    command: sh -c "npm install --no-audit --no-fund || true && npm start"
     networks:
       - motacare-network
 
