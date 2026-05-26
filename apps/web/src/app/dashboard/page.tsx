@@ -34,8 +34,8 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
-  const activeJobs = fixJobs.filter(
-    (j) => j.status === 'IN_PROGRESS' || j.status === 'PENDING' || j.status === 'AWAITING_PARTS',
+  const activeJobs = (fixJobs ?? []).filter(
+    (j) => j?.status === 'IN_PROGRESS' || j?.status === 'PENDING' || j?.status === 'AWAITING_PARTS',
   );
 
   return (

@@ -184,6 +184,23 @@ services:
       vehicle-service:
         condition: service_started
 
+  fix-job-service:
+    image: node:18-alpine
+    container_name: motacare-fix-job
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: ${FIX_JOB_SERVICE_PORT:-3010}
+    ports:
+      - '3010:3010'
+    volumes:
+      - ./apps/fix-job-service:/app
+      - /app/node_modules
+    working_dir: /app
+    command: sh -c "npm install --no-audit --no-fund || true && npm start"
+    networks:
+      - motacare-network
+
   api-gateway:
     build:
       context: .
@@ -198,6 +215,7 @@ services:
       AUTH_SERVICE_URL: http://auth-service:3001
       VEHICLE_SERVICE_URL: http://vehicle-service:3002
       INSPECTION_SERVICE_URL: http://inspection-service:3003
+      FIX_JOB_SERVICE_URL: http://fix-job-service:3010
     ports:
       - '3000:3000'
     volumes:
@@ -210,6 +228,7 @@ services:
       - auth-service
       - vehicle-service
       - inspection-service
+      - fix-job-service
 
   web:
     build:
