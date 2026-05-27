@@ -21,7 +21,7 @@ export default function InspectionsPage() {
 
   useEffect(() => {
     inspectionApi.list({ limit: 20 })
-      .then((res) => { setInspections(res.data); setTotal(res.pagination.total); })
+      .then((res) => { setInspections(res.data); setTotal(res?.pagination?.total ?? 0); })
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -40,7 +40,7 @@ export default function InspectionsPage() {
             <div key={i} className="card h-20 animate-pulse bg-gray-100 border-0" />
           ))}
         </div>
-      ) : inspections.length === 0 ? (
+      ) : (!inspections || inspections.length === 0) ? (
         <div className="card p-16 text-center">
           <ClipboardCheck className="h-12 w-12 text-gray-300 mx-auto mb-4" />
           <h2 className="text-lg font-semibold text-gray-700 mb-2">No inspections yet</h2>

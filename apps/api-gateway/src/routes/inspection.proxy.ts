@@ -78,38 +78,4 @@ export async function registerInspectionProxy(fastify: FastifyInstance) {
     const { id } = request.params as { id: string };
     return proxyRequest(request, reply, `${env.INSPECTION_SERVICE_URL}/inspections/${id}/fix-jobs`, 'POST');
   });
-
-  // ──────────────────────────────────────────────────────────
-  // FIX JOBS
-  // ──────────────────────────────────────────────────────────
-
-  // GET /fix-jobs
-  fastify.get('/fix-jobs', {
-    onRequest: [fastify.authenticate],
-    schema: { tags: ['Fix Jobs'], summary: 'List fix jobs', security: [{ bearerAuth: [] }] },
-  }, async (request, reply) => {
-    const query = new URLSearchParams(request.query as any).toString();
-    const target = env.FIX_JOB_SERVICE_URL ?? env.INSPECTION_SERVICE_URL;
-    return proxyRequest(request, reply, `${target}/fix-jobs${query ? `?${query}` : ''}`, 'GET');
-  });
-
-  // GET /fix-jobs/:id
-  fastify.get('/fix-jobs/:id', {
-    onRequest: [fastify.authenticate],
-    schema: { tags: ['Fix Jobs'], summary: 'Get a fix job', security: [{ bearerAuth: [] }] },
-  }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const target = env.FIX_JOB_SERVICE_URL ?? env.INSPECTION_SERVICE_URL;
-    return proxyRequest(request, reply, `${target}/fix-jobs/${id}`, 'GET');
-  });
-
-  // PATCH /fix-jobs/:id
-  fastify.patch('/fix-jobs/:id', {
-    onRequest: [fastify.requireRole('FIXER', 'ADMIN')],
-    schema: { tags: ['Fix Jobs'], summary: 'Update fix job status', security: [{ bearerAuth: [] }] },
-  }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const target = env.FIX_JOB_SERVICE_URL ?? env.INSPECTION_SERVICE_URL;
-    return proxyRequest(request, reply, `${target}/fix-jobs/${id}`, 'PATCH');
-  });
 }

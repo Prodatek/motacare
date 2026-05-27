@@ -211,7 +211,7 @@ services:
       - auth-service
       - vehicle-service
       - inspection-service
-      - fix-job-service
+      - fix-jobs
   
   fix-jobs:
     build:

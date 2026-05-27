@@ -16,7 +16,7 @@ export default function VehiclesPage() {
 
   useEffect(() => {
     vehicleApi.list({ limit: 20 })
-      .then((res) => { setVehicles(res.data); setTotal(res.pagination.total); })
+      .then((res) => { setVehicles(res.data); setTotal(res?.pagination?.total ?? 0); })
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -45,7 +45,7 @@ export default function VehiclesPage() {
             <div key={i} className="card h-24 animate-pulse bg-gray-100 border-0" />
           ))}
         </div>
-      ) : vehicles.length === 0 ? (
+      ) : (!vehicles || vehicles.length === 0) ? (
         <div className="card p-16 text-center">
           <Car className="h-12 w-12 text-gray-300 mx-auto mb-4" />
           <h2 className="text-lg font-semibold text-gray-700 mb-2">No vehicles registered</h2>
