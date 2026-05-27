@@ -24,9 +24,9 @@ export default function DashboardPage() {
           fixJobApi.list({ limit: 5 }),
         ]);
 
-        if (v.status === 'fulfilled') setVehicles(v.value.data);
-        if (i.status === 'fulfilled') setInspections(i.value.data);
-        if (f.status === 'fulfilled') setFixJobs(f.value.data);
+        if (v.status === 'fulfilled') setVehicles(v.value?.data ?? []);
+        if (i.status === 'fulfilled') setInspections(i.value?.data ?? []);
+        if (f.status === 'fulfilled') setFixJobs(f.value?.data ?? []);
       } finally {
         setIsLoading(false);
       }
@@ -34,9 +34,11 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
-  const activeJobs = (fixJobs ?? []).filter(
-    (j) => j?.status === 'IN_PROGRESS' || j?.status === 'PENDING' || j?.status === 'AWAITING_PARTS',
-  );
+  const activeJobs = Array.isArray(fixJobs)
+    ? fixJobs.filter(
+        (j) => j.status === 'IN_PROGRESS' || j.status === 'PENDING' || j.status === 'AWAITING_PARTS',
+      )
+    : [];
 
   return (
     <div className="max-w-5xl">

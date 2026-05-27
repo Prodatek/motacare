@@ -184,25 +184,6 @@ services:
       vehicle-service:
         condition: service_started
 
-  fix-job-service:
-    build:
-      context: .
-      dockerfile: infra/docker/fix-job-service.Dockerfile
-      target: development
-    container_name: motacare-fix-job
-    restart: unless-stopped
-    environment:
-      NODE_ENV: development
-      PORT: ${FIX_JOB_SERVICE_PORT:-3010}
-    ports:
-      - '3010:3010'
-    volumes:
-      - ./apps/fix-job-service:/app/apps/fix-job-service
-      - ./packages:/app/packages
-      - /app/node_modules
-    networks:
-      - motacare-network
-
   api-gateway:
     build:
       context: .
@@ -217,7 +198,7 @@ services:
       AUTH_SERVICE_URL: http://auth-service:3001
       VEHICLE_SERVICE_URL: http://vehicle-service:3002
       INSPECTION_SERVICE_URL: http://inspection-service:3003
-      FIX_JOB_SERVICE_URL: http://fix-job-service:3010
+      FIX_JOBS_SERVICE_URL: http://fix-jobs:3004
     ports:
       - '3000:3000'
     volumes:
@@ -231,7 +212,40 @@ services:
       - vehicle-service
       - inspection-service
       - fix-job-service
-
+  
+  fix-jobs:
+    build:
+      context: .
+      dockerfile: infra/docker/fix-jobs.Dockerfile
+      target: development
+    container_name: motacare-fixjobs
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: ${FIX_JOBS_SERVICE_PORT:-3004}
+      JWT_SECRET: ${JWT_SECRET}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-motacare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-motacare_dev_password}
+      POSTGRES_DB: ${FIX_JOBS_DB_NAME:-motacare_fixjobs}
+      AUTH_SERVICE_URL: http://auth-service:3001
+      VEHICLE_SERVICE_URL: http://vehicle-service:3002
+      INSPECTION_SERVICE_URL: http://inspection-service:3003
+    ports:
+      - '3004:3004'
+    volumes:
+      - ./apps/fix-jobs:/app/apps/fix-jobs
+      - ./packages:/app/packages
+      - /app/node_modules
+      - /app/apps/fix-jobs/node_modules
+    networks:
+      - motacare-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
   web:
     build:
       context: .

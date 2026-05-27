@@ -20,7 +20,7 @@ const envSchema = z.object({
   AUTH_SERVICE_URL: z.string().url().default('http://localhost:3001'),
   VEHICLE_SERVICE_URL: z.string().url().default('http://localhost:3002'),
   INSPECTION_SERVICE_URL: z.string().url().default('http://localhost:3003'),
-  FIX_JOB_SERVICE_URL: z.string().url().optional(),
+  FIX_JOBS_SERVICE_URL: z.string().url().default('http://localhost:3004'),
 
   // CORS — comma-separated allowed origins in production
   ALLOWED_ORIGINS: z.string().default('http://localhost:3005'),
