@@ -28,14 +28,18 @@ export const registerVehicleSchema = z.object({
     .transform((v) => v.toUpperCase().trim()),
   make: z.string().min(1).max(100),
   model: z.string().min(1).max(100),
-  year: z.coerce.number().int().min(1900, 'Year must be 1900 or later').max(currentYear + 1, `Year cannot exceed ${currentYear + 1}`),
+  year: z
+    .number()
+    .int()
+    .min(1900, 'Year must be 1900 or later')
+    .max(currentYear + 1, `Year cannot exceed ${currentYear + 1}`),
   color: z.string().max(50).optional(),
   trim: z.string().max(100).optional(),
   fuelType: z.enum(['PETROL', 'DIESEL', 'ELECTRIC', 'HYBRID', 'CNG', 'LPG']),
   transmissionType: z.enum(['MANUAL', 'AUTOMATIC', 'CVT']),
   engineCapacity: z.string().max(20).optional(),
   engineCode: z.string().max(50).optional(),
-  mileageAtRegistration: z.coerce.number().int().min(0).default(0),
+  mileageAtRegistration: z.number().int().min(0).default(0),
 });
 
 // ============================================================
@@ -76,6 +80,7 @@ export const vehicleQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   status: z.enum(['ACTIVE', 'INACTIVE', 'TRANSFERRED']).optional(),
+  search: z.string().max(100).optional(),  // fixer search: plate, make, model, VIN
 });
 
 // ============================================================

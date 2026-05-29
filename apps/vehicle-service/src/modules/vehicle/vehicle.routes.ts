@@ -28,8 +28,8 @@ export async function vehicleRoutes(fastify: FastifyInstance) {
     (req, rep) => vehicleController.register(req, rep),
   );
 
-  // List all vehicles for the authenticated owner
-  fastify.get('/', { ...ownerOrAdmin, schema: { tags: ['Vehicles'], summary: 'List all vehicles for the authenticated owner', security: [{ bearerAuth: [] }] } },
+  // List vehicles (owners see own; fixers/admins search all)
+  fastify.get('/', { ...authenticate, schema: { tags: ['Vehicles'], summary: 'List or search vehicles', security: [{ bearerAuth: [] }] } },
     (req, rep) => vehicleController.list(req, rep),
   );
 

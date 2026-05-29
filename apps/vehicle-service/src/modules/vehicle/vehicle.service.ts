@@ -130,6 +130,51 @@ export class VehicleService {
   }
 
   // ----------------------------------------------------------
+  // SEARCH ALL VEHICLES (fixers + admins only)
+  // Allows fixers to find vehicles by plate, make, model, or VIN
+  // ----------------------------------------------------------
+
+  async searchVehicles(
+    query: VehicleQueryInput & { search?: string },
+  ): Promise<PaginatedResponse<Vehicle>> {
+    const { offset, limit, page } = parsePagination(query);
+
+    const conditions: ReturnType<typeof eq>[] = [];
+    if (query.status) conditions.push(eq(vehicles.status, query.status));
+
+    // Text search across plate, make, model, VIN
+    let rows: Vehicle[];
+    let total: number;
+
+    if (query.search) {
+      const term = `%${query.search.toLowerCase()}%`;
+      const { sql, ilike, or } = await import('drizzle-orm');
+      const searchCondition = or(
+        ilike(vehicles.licensePlate, term),
+        ilike(vehicles.make, term),
+        ilike(vehicles.model, term),
+        ilike(vehicles.vin, term),
+      );
+      const where = conditions.length > 0 ? and(...conditions, searchCondition) : searchCondition;
+      [rows, [{ value: total }]] = await Promise.all([
+        db.query.vehicles.findMany({ where, orderBy: [desc(vehicles.createdAt)], limit, offset }),
+        db.select({ value: count() }).from(vehicles).where(where),
+      ]);
+    } else {
+      const where = conditions.length > 0 ? and(...conditions) : undefined;
+      [rows, [{ value: total }]] = await Promise.all([
+        db.query.vehicles.findMany({ where, orderBy: [desc(vehicles.createdAt)], limit, offset }),
+        db.select({ value: count() }).from(vehicles).where(where),
+      ]);
+    }
+
+    return {
+      data: rows,
+      pagination: buildPaginationMeta(Number(total), page, limit),
+    };
+  }
+
+  // ----------------------------------------------------------
   // GET A SINGLE VEHICLE BY HASH
   // The hash is the public-facing identifier — never expose the UUID
   // ----------------------------------------------------------
@@ -269,7 +314,17 @@ export class VehicleService {
   // Returns minimal data needed to verify a vehicle exists
   // ----------------------------------------------------------
 
-  async lookupByHash(hash: string): Promise<{ id: string; hash: string; ownerId: string; make: string; model: string; year: number } | null> {
+  async lookupByHash(hash: string): Promise<{
+    id: string;
+    hash: string;
+    ownerId: string;
+    make: string;
+    model: string;
+    year: number;
+    fuelType: string;
+    transmissionType: string;
+    engineCapacity: string | null;
+  } | null> {
     const vehicle = await db.query.vehicles.findFirst({
       where: eq(vehicles.hash, hash),
       columns: {
@@ -279,6 +334,9 @@ export class VehicleService {
         make: true,
         model: true,
         year: true,
+        fuelType: true,
+        transmissionType: true,
+        engineCapacity: true,
       },
     });
 

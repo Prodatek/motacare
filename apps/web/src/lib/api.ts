@@ -54,27 +54,20 @@ async function request<T>(
     headers,
   });
 
-  // Handle 401 — refresh once, except when calling /auth/refresh itself.
+  // Handle 401 — try to refresh token once, then redirect to login
   if (response.status === 401) {
-    if (path === '/auth/refresh') {
-      clearTokens();
-      window.location.href = '/login';
-      throw new ApiClientError(401, 'Unauthorized', 'Session expired');
-    }
-
     const refreshed = await tryRefreshToken();
     if (refreshed) {
       // Retry original request with new token
       return request<T>(path, options);
     }
-
     // Refresh failed — boot to login
     clearTokens();
     window.location.href = '/login';
     throw new ApiClientError(401, 'Unauthorized', 'Session expired');
   }
 
-  const data = await response.json() as ApiResponse<T> & ApiError;
+  const data = await response.json() as ApiResponse<T> & ApiError & { pagination?: unknown };
 
   if (!response.ok) {
     throw new ApiClientError(
@@ -85,6 +78,14 @@ async function request<T>(
     );
   }
 
+  // If the response contains a pagination key it is a paginated list response.
+  // Return the full object ({ data, pagination }) rather than unwrapping .data,
+  // so callers can access both the rows and the pagination metadata.
+  if ('pagination' in data && data.pagination !== undefined) {
+    return data as unknown as T;
+  }
+
+  // For all other responses, unwrap the nested data field.
   return (data.data ?? data) as T;
 }
 
@@ -108,9 +109,6 @@ export function getAccessToken(): string | null {
 export function clearTokens() {
   _accessToken = null;
   localStorage.removeItem('mc_refresh');
-  if (typeof document !== 'undefined') {
-    document.cookie = 'mc_session=; path=/; max-age=0; SameSite=Lax';
-  }
 }
 
 export function saveRefreshToken(token: string) {
@@ -176,14 +174,6 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     }),
 
-  refresh: () => {
-    const refreshToken = getRefreshToken();
-    return request<TokenPair>('/auth/refresh', {
-      method: 'POST',
-      body: JSON.stringify({ refreshToken }),
-    });
-  },
-
   logout: (refreshToken: string) =>
     request<void>('/auth/logout', {
       method: 'POST',
@@ -218,8 +208,10 @@ export const vehicleApi = {
       body: JSON.stringify(payload),
     }),
 
-  list: (params?: { page?: number; limit?: number; status?: string }) => {
-    const query = new URLSearchParams(params as any).toString();
+  list: (params?: { page?: number; limit?: number; status?: string; search?: string }) => {
+    const query = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any
+    ).toString();
     return request<PaginatedResponse<Vehicle>>(`/vehicles${query ? `?${query}` : ''}`);
   },
 
@@ -242,10 +234,15 @@ export const vehicleApi = {
 export const inspectionApi = {
   getChecklist: () => request<any[]>('/inspections/checklist'),
 
-  create: (vehicleHash: string, mileageAtInspection: number) =>
+  create: (vehicleHash: string, mileageAtInspection: number, reportedSymptoms?: string[], priorityAreas?: string[]) =>
     request<Inspection>('/inspections', {
       method: 'POST',
-      body: JSON.stringify({ vehicleHash, mileageAtInspection }),
+      body: JSON.stringify({
+        vehicleHash,
+        mileageAtInspection,
+        ...(reportedSymptoms?.length ? { reportedSymptoms } : {}),
+        ...(priorityAreas?.length ? { priorityAreas } : {}),
+      }),
     }),
 
   list: (params?: { page?: number; status?: string; vehicleHash?: string }) => {

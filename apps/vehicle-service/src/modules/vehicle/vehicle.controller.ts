@@ -24,16 +24,6 @@ export class VehicleController {
   async register(request: FastifyRequest, reply: FastifyReply) {
     const parsed = registerVehicleSchema.safeParse(request.body);
     if (!parsed.success) {
-      try {
-        request.log?.warn({
-          event: 'validation_error',
-          route: '/vehicles',
-          body: request.body,
-          errors: parsed.error.flatten().fieldErrors,
-        }, 'Register vehicle validation failed');
-      } catch {
-        // best-effort logging
-      }
       return reply.status(400).send({
         statusCode: 400,
         error: 'Validation Error',
@@ -68,8 +58,17 @@ export class VehicleController {
     }
 
     try {
-      const { sub: ownerId } = request.user as { sub: string };
-      const result = await this.vehicleService.getOwnerVehicles(ownerId, parsed.data);
+      const { sub: requesterId, role } = request.user as { sub: string; role: string };
+
+      let result;
+      if (role === 'FIXER' || role === 'ADMIN') {
+        // Fixers can search all vehicles
+        result = await this.vehicleService.searchVehicles(parsed.data);
+      } else {
+        // Owners only see their own vehicles
+        result = await this.vehicleService.getOwnerVehicles(requesterId, parsed.data);
+      }
+
       return reply.status(200).send({ statusCode: 200, ...result });
     } catch (error) {
       return this.handleError(error, reply);
