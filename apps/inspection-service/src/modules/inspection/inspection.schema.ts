@@ -8,6 +8,11 @@ import { ALL_CHECK_IDS } from './checklist';
 export const createInspectionSchema = z.object({
   vehicleHash: z.string().length(64, 'Invalid vehicle hash'),
   mileageAtInspection: z.number().int().min(0, 'Mileage cannot be negative'),
+  // Phase 2: owner-reported symptoms and fixer priority areas
+  reportedSymptoms: z.array(z.string().max(200)).max(10).optional(),
+  priorityAreas: z.array(
+    z.enum(['engine', 'brakes', 'tyres', 'electrical', 'fluids', 'transmission', 'body', 'exhaust'])
+  ).optional(),
 });
 
 // ============================================================
@@ -36,10 +41,18 @@ export const batchUpdateItemsSchema = z.object({
 
 // ============================================================
 // COMPLETE INSPECTION
+// Fixer explicitly chooses the outcome — the system no longer
+// auto-derives it from pass/fail counts.
 // ============================================================
 
 export const completeInspectionSchema = z.object({
-  summary: z.string().min(10, 'Summary must be at least 10 characters').max(2000),
+  // Fixer's written summary — required for COMPLETED and NEEDS_FOLLOWUP, optional for DRAFT
+  summary: z.string().max(2000).optional().nullable(),
+
+  // Explicit outcome chosen by the fixer
+  outcome: z.enum(['COMPLETED', 'NEEDS_FOLLOWUP', 'DRAFT'], {
+    errorMap: () => ({ message: 'Outcome must be COMPLETED, NEEDS_FOLLOWUP, or DRAFT' }),
+  }),
 });
 
 // ============================================================

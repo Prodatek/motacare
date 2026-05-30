@@ -27,6 +27,15 @@ import type {
 } from './inspection.schema';
 import type { PaginatedResponse } from '@motacare/shared-types';
 
+// Lazy-load AI client so service starts even without ANTHROPIC_API_KEY
+async function getAiClient() {
+  try {
+    return await import('@motacare/ai-client');
+  } catch {
+    return null;
+  }
+}
+
 // ============================================================
 // CUSTOM ERRORS
 // ============================================================
@@ -56,6 +65,9 @@ async function verifyVehicleHash(hash: string): Promise<{
   make: string;
   model: string;
   year: number;
+  fuelType: string;
+  transmissionType: string;
+  engineCapacity?: string | null;
 }> {
   const response = await fetch(
     `${env.VEHICLE_SERVICE_URL}/vehicles/internal/lookup/${hash}`,
@@ -67,7 +79,18 @@ async function verifyVehicleHash(hash: string): Promise<{
     );
   }
 
-  const body = (await response.json()) as { data: { id: string; ownerId: string; make: string; model: string; year: number } };
+  const body = (await response.json()) as {
+    data: {
+      id: string;
+      ownerId: string;
+      make: string;
+      model: string;
+      year: number;
+      fuelType: string;
+      transmissionType: string;
+      engineCapacity?: string | null;
+    }
+  };
   return body.data;
 }
 
@@ -94,7 +117,7 @@ export class InspectionService {
   async createInspection(
     input: CreateInspectionInput,
     fixerId: string,
-  ): Promise<Inspection & { items: InspectionItem[] }> {
+  ): Promise<Inspection & { items: InspectionItem[]; aiSummaryHint?: string; fallbackUsed?: boolean }> {
 
     // 1. Verify vehicle exists via vehicle-service
     const vehicle = await verifyVehicleHash(input.vehicleHash);
@@ -113,7 +136,53 @@ export class InspectionService {
       );
     }
 
-    // 3. Create inspection + seed all checklist items atomically
+    // 3. Attempt AI dynamic checklist generation
+    let checklistItems = buildInitialInspectionItems('PLACEHOLDER'); // temp id
+    let aiSummaryHint: string | undefined;
+    let fallbackUsed = true;
+
+    if (env.ANTHROPIC_API_KEY) {
+      try {
+        const ai = await getAiClient();
+        if (ai) {
+          const dynamicChecklist = await ai.generateDynamicChecklist({
+            vehicleContext: {
+              make: vehicle.make,
+              model: vehicle.model,
+              year: vehicle.year,
+              fuelType: vehicle.fuelType,
+              transmissionType: vehicle.transmissionType,
+              engineCapacity: vehicle.engineCapacity,
+              mileageAtInspection: input.mileageAtInspection,
+            },
+            reportedSymptoms: input.reportedSymptoms,
+            priorityAreas: input.priorityAreas,
+          });
+
+          aiSummaryHint = dynamicChecklist.aiSummaryHint;
+          fallbackUsed = dynamicChecklist.fallbackUsed;
+
+          // Convert AI categories to DB item seeds
+          checklistItems = dynamicChecklist.categories.flatMap((cat) =>
+            cat.items.map((item) => ({
+              inspectionId: 'PLACEHOLDER',
+              category: cat.id,
+              checkId: item.id,
+              checkName: item.name,
+              status: 'NOT_CHECKED' as const,
+              severity: null,
+              notes: item.aiReason ? `AI note: ${item.aiReason}` : null,
+              mediaUrls: [],
+            })),
+          );
+        }
+      } catch (err) {
+        // AI failed — fall back to static (already set above)
+        console.warn('[inspection] AI checklist failed, using static fallback:', err);
+      }
+    }
+
+    // 4. Create inspection + seed all checklist items atomically
     const result = await db.transaction(async (tx) => {
       const [newInspection] = await tx
         .insert(inspections)
@@ -127,8 +196,12 @@ export class InspectionService {
         })
         .returning();
 
-      // Seed all checklist items as NOT_CHECKED
-      const itemSeeds = buildInitialInspectionItems(newInspection.id);
+      // Replace placeholder ID with real inspection ID
+      const itemSeeds = checklistItems.map((item) => ({
+        ...item,
+        inspectionId: newInspection.id,
+      }));
+
       const seededItems = await tx
         .insert(inspectionItems)
         .values(itemSeeds)
@@ -137,7 +210,7 @@ export class InspectionService {
       return { ...newInspection, items: seededItems };
     });
 
-    return result;
+    return { ...result, aiSummaryHint, fallbackUsed };
   }
 
   // ----------------------------------------------------------
@@ -298,33 +371,83 @@ export class InspectionService {
 
     if (!inspection) throw new NotFoundError('Inspection not found');
     if (inspection.fixerId !== fixerId) throw new ForbiddenError();
-    if (inspection.status === 'COMPLETED') throw new ConflictError('Inspection already completed');
+
+    // Only block if already in a terminal state
+    if (inspection.status === 'COMPLETED' || inspection.status === 'NEEDS_FOLLOWUP') {
+      throw new ConflictError(
+        `Inspection is already marked as ${inspection.status}. ` +
+        `Only DRAFT or IN_PROGRESS inspections can be updated.`,
+      );
+    }
+
+    // Require a summary for COMPLETED and NEEDS_FOLLOWUP outcomes
+    if (
+      (input.outcome === 'COMPLETED' || input.outcome === 'NEEDS_FOLLOWUP') &&
+      (!input.summary || input.summary.trim().length < 5)
+    ) {
+      throw new BadRequestError(
+        'A summary is required when marking an inspection as COMPLETED or NEEDS_FOLLOWUP.',
+      );
+    }
 
     const items = await db.query.inspectionItems.findMany({
       where: eq(inspectionItems.inspectionId, inspectionId),
     });
 
-    const uncheckedItems = items.filter((i) => i.status === 'NOT_CHECKED');
+    // Generate AI summary for completed/needs-followup outcomes — best effort, non-blocking
+    let aiSummary: string | null = inspection.aiSummary ?? null;
+    if (
+      env.ANTHROPIC_API_KEY &&
+      input.outcome !== 'DRAFT' &&
+      input.summary
+    ) {
+      try {
+        const ai = await getAiClient();
+        if (ai) {
+          const vehicleRes = await fetch(
+            `${env.VEHICLE_SERVICE_URL}/vehicles/internal/lookup/${inspection.vehicleHash}`,
+          );
+          const vehicleData = vehicleRes.ok
+            ? ((await vehicleRes.json()) as any).data
+            : null;
 
-    // Allow completion if at most 20% of items are unchecked
-    // (some items may genuinely not apply, e.g. 4WD on a 2WD car)
-    const uncheckedThreshold = Math.ceil(items.length * 0.2);
-    if (uncheckedItems.length > uncheckedThreshold) {
-      throw new BadRequestError(
-        `${uncheckedItems.length} items are still NOT_CHECKED. ` +
-        `Please complete or mark inapplicable items before finalising.`,
-      );
+          if (vehicleData) {
+            const summaryResult = await ai.generateInspectionSummary({
+              vehicle: {
+                make: vehicleData.make,
+                model: vehicleData.model,
+                year: vehicleData.year,
+                mileageAtInspection: inspection.mileageAtInspection,
+                fuelType: vehicleData.fuelType,
+              },
+              fixer: { firstName: 'Technician' },
+              items: items.map((i) => ({
+                category: i.category,
+                checkName: i.checkName,
+                status: i.status as any,
+                severity: i.severity,
+                notes: i.notes,
+              })),
+              fixerSummary: input.summary,
+              inspectionDate: new Date().toISOString(),
+            });
+            aiSummary = JSON.stringify(summaryResult);
+          }
+        }
+      } catch (err) {
+        console.warn('[inspection] AI summary generation failed:', err);
+      }
     }
 
-    const hasFailures = items.some((i) => i.status === 'FAIL');
-    const finalStatus = hasFailures ? 'NEEDS_FOLLOWUP' : 'COMPLETED';
+    const isTerminal = input.outcome !== 'DRAFT';
 
     const [completed] = await db
       .update(inspections)
       .set({
-        status: finalStatus,
-        summary: input.summary,
-        completedAt: new Date(),
+        status: input.outcome,
+        summary: input.summary ?? inspection.summary,
+        aiSummary,
+        completedAt: isTerminal ? new Date() : null,
         updatedAt: new Date(),
       })
       .where(eq(inspections.id, inspectionId))
@@ -352,7 +475,9 @@ export class InspectionService {
     if (inspection.fixerId !== fixerId) throw new ForbiddenError();
 
     if (inspection.status === 'DRAFT' || inspection.status === 'IN_PROGRESS') {
-      throw new BadRequestError('Complete the inspection before creating a fix job');
+      throw new BadRequestError(
+        'Mark the inspection as COMPLETED or NEEDS_FOLLOWUP before creating a fix job.',
+      );
     }
 
     const [job] = await db

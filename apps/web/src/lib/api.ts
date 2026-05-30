@@ -263,18 +263,22 @@ export const inspectionApi = {
       body: JSON.stringify(payload),
     }),
 
-  complete: (inspectionId: string, summary: string) =>
+  complete: (inspectionId: string, outcome: 'COMPLETED' | 'NEEDS_FOLLOWUP' | 'DRAFT', summary?: string) =>
     request<Inspection>(`/inspections/${inspectionId}/complete`, {
       method: 'POST',
-      body: JSON.stringify({ summary }),
+      body: JSON.stringify({ outcome, summary: summary ?? null }),
     }),
 
-  createFixJob: (inspectionId: string, payload: {
+  createFixJob: (payload: {
+    inspectionId: string;
+    vehicleHash: string;
+    ownerId: string;
     description: string;
     estimatedCompletionAt?: string;
     estimatedCost?: number;
+    currency?: string;
   }) =>
-    request<FixJob>(`/inspections/${inspectionId}/fix-jobs`, {
+    request<FixJob>(`/fix-jobs`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
