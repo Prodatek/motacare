@@ -8,23 +8,23 @@ import { ALL_CHECK_IDS } from './checklist';
 export const createInspectionSchema = z.object({
   vehicleHash: z.string().length(64, 'Invalid vehicle hash'),
   mileageAtInspection: z.number().int().min(0, 'Mileage cannot be negative'),
-  // Phase 2: owner-reported symptoms and fixer priority areas
   reportedSymptoms: z.array(z.string().max(200)).max(10).optional(),
   priorityAreas: z.array(
-    z.enum(['engine', 'brakes', 'tyres', 'electrical', 'fluids', 'transmission', 'body', 'exhaust'])
+    z.enum(['engine', 'brakes', 'tyres', 'electrical', 'fluids', 'transmission', 'body', 'exhaust']),
   ).optional(),
 });
 
 // ============================================================
 // UPDATE A SINGLE INSPECTION ITEM
-// Fixers submit one item at a time as they work through the car
+//
+// BUG FIX: the original validator used ALL_CHECK_IDS.includes(id)
+// which blocked AI-generated check IDs (prefixed "ai_").
+// We now accept any non-empty string so both static and AI-
+// generated check IDs pass through cleanly.
 // ============================================================
 
 export const updateItemSchema = z.object({
-  checkId: z.string().refine(
-    (id) => ALL_CHECK_IDS.includes(id),
-    { message: 'Unknown check ID — must be a valid checklist item' },
-  ),
+  checkId: z.string().min(1, 'checkId is required'),
   status: z.enum(['PASS', 'FAIL', 'WARNING', 'NOT_CHECKED']),
   severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
@@ -32,7 +32,7 @@ export const updateItemSchema = z.object({
 });
 
 // ============================================================
-// BATCH UPDATE — submit multiple items at once
+// BATCH UPDATE
 // ============================================================
 
 export const batchUpdateItemsSchema = z.object({
@@ -41,22 +41,31 @@ export const batchUpdateItemsSchema = z.object({
 
 // ============================================================
 // COMPLETE INSPECTION
-// Fixer explicitly chooses the outcome — the system no longer
-// auto-derives it from pass/fail counts.
+//
+// BUG FIX: previous version had summary: z.string().min(10)
+// and no outcome field. The controller was receiving
+// { outcome, summary } from the frontend but the schema only
+// knew about summary — causing a 400 on every completion attempt.
+//
+// The fixer now explicitly selects an outcome:
+//   COMPLETED     — all done, vehicle is ready
+//   NEEDS_FOLLOWUP — issues found, repairs required
+//   DRAFT         — save progress and continue later
+//
+// Summary is required for COMPLETED and NEEDS_FOLLOWUP,
+// optional for DRAFT. The service enforces this at runtime.
 // ============================================================
 
 export const completeInspectionSchema = z.object({
-  // Fixer's written summary — required for COMPLETED and NEEDS_FOLLOWUP, optional for DRAFT
-  summary: z.string().max(2000).optional().nullable(),
-
-  // Explicit outcome chosen by the fixer
   outcome: z.enum(['COMPLETED', 'NEEDS_FOLLOWUP', 'DRAFT'], {
-    errorMap: () => ({ message: 'Outcome must be COMPLETED, NEEDS_FOLLOWUP, or DRAFT' }),
+    required_error: 'outcome is required (COMPLETED, NEEDS_FOLLOWUP, or DRAFT)',
+    invalid_type_error: 'outcome must be COMPLETED, NEEDS_FOLLOWUP, or DRAFT',
   }),
+  summary: z.string().max(2000).optional().nullable(),
 });
 
 // ============================================================
-// CREATE FIX JOB
+// CREATE FIX JOB (nested under inspection — legacy route)
 // ============================================================
 
 export const createFixJobSchema = z.object({
@@ -72,12 +81,8 @@ export const createFixJobSchema = z.object({
 
 export const updateFixJobSchema = z.object({
   status: z.enum([
-    'PENDING',
-    'IN_PROGRESS',
-    'AWAITING_PARTS',
-    'COMPLETED',
-    'DELIVERED',
-    'CANCELLED',
+    'PENDING', 'IN_PROGRESS', 'AWAITING_PARTS',
+    'COMPLETED', 'DELIVERED', 'CANCELLED',
   ]).optional(),
   estimatedCompletionAt: z.coerce.date().optional().nullable(),
   finalCost: z.number().min(0).optional(),

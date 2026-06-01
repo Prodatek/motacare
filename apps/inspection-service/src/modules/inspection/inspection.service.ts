@@ -27,7 +27,7 @@ import type {
 } from './inspection.schema';
 import type { PaginatedResponse } from '@motacare/shared-types';
 
-// Lazy-load AI client so service starts even without ANTHROPIC_API_KEY
+// Lazy-load AI client — service starts normally without ANTHROPIC_API_KEY
 async function getAiClient() {
   try {
     return await import('@motacare/ai-client');
@@ -55,8 +55,7 @@ export class BadRequestError extends Error {
 
 // ============================================================
 // VEHICLE VERIFICATION
-// Calls vehicle-service internal lookup to confirm the hash
-// exists before we allow an inspection to be created.
+// Cross-service call to confirm hash exists before inspection
 // ============================================================
 
 async function verifyVehicleHash(hash: string): Promise<{
@@ -72,25 +71,12 @@ async function verifyVehicleHash(hash: string): Promise<{
   const response = await fetch(
     `${env.VEHICLE_SERVICE_URL}/vehicles/internal/lookup/${hash}`,
   );
-
   if (!response.ok) {
     throw new NotFoundError(
       'Vehicle not found. Register the vehicle before creating an inspection.',
     );
   }
-
-  const body = (await response.json()) as {
-    data: {
-      id: string;
-      ownerId: string;
-      make: string;
-      model: string;
-      year: number;
-      fuelType: string;
-      transmissionType: string;
-      engineCapacity?: string | null;
-    }
-  };
+  const body = (await response.json()) as { data: any };
   return body.data;
 }
 
@@ -102,8 +88,6 @@ export class InspectionService {
 
   // ----------------------------------------------------------
   // GET CHECKLIST TEMPLATE
-  // Returns the full static checklist — used to render the
-  // form before an inspection session is created
   // ----------------------------------------------------------
 
   getChecklist() {
@@ -112,6 +96,8 @@ export class InspectionService {
 
   // ----------------------------------------------------------
   // CREATE INSPECTION SESSION
+  // Generates AI dynamic checklist if key is present,
+  // falls back to static checklist automatically on any failure.
   // ----------------------------------------------------------
 
   async createInspection(
@@ -119,10 +105,8 @@ export class InspectionService {
     fixerId: string,
   ): Promise<Inspection & { items: InspectionItem[]; aiSummaryHint?: string; fallbackUsed?: boolean }> {
 
-    // 1. Verify vehicle exists via vehicle-service
     const vehicle = await verifyVehicleHash(input.vehicleHash);
 
-    // 2. Check no active inspection already exists for this vehicle
     const existingActive = await db.query.inspections.findFirst({
       where: and(
         eq(inspections.vehicleHash, input.vehicleHash),
@@ -136,8 +120,8 @@ export class InspectionService {
       );
     }
 
-    // 3. Attempt AI dynamic checklist generation
-    let checklistItems = buildInitialInspectionItems('PLACEHOLDER'); // temp id
+    // Attempt AI dynamic checklist — falls back to static on any error
+    let checklistItems = buildInitialInspectionItems('PLACEHOLDER');
     let aiSummaryHint: string | undefined;
     let fallbackUsed = true;
 
@@ -162,7 +146,6 @@ export class InspectionService {
           aiSummaryHint = dynamicChecklist.aiSummaryHint;
           fallbackUsed = dynamicChecklist.fallbackUsed;
 
-          // Convert AI categories to DB item seeds
           checklistItems = dynamicChecklist.categories.flatMap((cat) =>
             cat.items.map((item) => ({
               inspectionId: 'PLACEHOLDER',
@@ -171,18 +154,16 @@ export class InspectionService {
               checkName: item.name,
               status: 'NOT_CHECKED' as const,
               severity: null,
-              notes: item.aiReason ? `AI note: ${item.aiReason}` : null,
+              notes: item.aiReason ? `AI: ${item.aiReason}` : null,
               mediaUrls: [],
             })),
           );
         }
       } catch (err) {
-        // AI failed — fall back to static (already set above)
         console.warn('[inspection] AI checklist failed, using static fallback:', err);
       }
     }
 
-    // 4. Create inspection + seed all checklist items atomically
     const result = await db.transaction(async (tx) => {
       const [newInspection] = await tx
         .insert(inspections)
@@ -196,7 +177,6 @@ export class InspectionService {
         })
         .returning();
 
-      // Replace placeholder ID with real inspection ID
       const itemSeeds = checklistItems.map((item) => ({
         ...item,
         inspectionId: newInspection.id,
@@ -229,13 +209,8 @@ export class InspectionService {
 
     if (!inspection) throw new NotFoundError('Inspection not found');
 
-    // Access control: owners see their own, fixers see jobs they own, admins see all
-    if (requesterRole === 'OWNER' && inspection.ownerId !== requesterId) {
-      throw new ForbiddenError();
-    }
-    if (requesterRole === 'FIXER' && inspection.fixerId !== requesterId) {
-      throw new ForbiddenError();
-    }
+    if (requesterRole === 'OWNER' && inspection.ownerId !== requesterId) throw new ForbiddenError();
+    if (requesterRole === 'FIXER' && inspection.fixerId !== requesterId) throw new ForbiddenError();
 
     const items = await db.query.inspectionItems.findMany({
       where: eq(inspectionItems.inspectionId, inspectionId),
@@ -243,12 +218,11 @@ export class InspectionService {
     });
 
     const stats = computeChecklistStats(items);
-
     return { ...inspection, items, stats };
   }
 
   // ----------------------------------------------------------
-  // LIST INSPECTIONS (for a fixer or owner, paginated)
+  // LIST INSPECTIONS
   // ----------------------------------------------------------
 
   async listInspections(
@@ -258,11 +232,9 @@ export class InspectionService {
   ): Promise<PaginatedResponse<Inspection>> {
     const { offset, limit, page } = parsePagination(query);
 
-    const conditions = requesterRole === 'OWNER'
-      ? [eq(inspections.ownerId, requesterId)]
-      : requesterRole === 'FIXER'
-        ? [eq(inspections.fixerId, requesterId)]
-        : []; // ADMIN sees all
+    const conditions =
+      requesterRole === 'OWNER' ? [eq(inspections.ownerId, requesterId)] :
+      requesterRole === 'FIXER' ? [eq(inspections.fixerId, requesterId)] : [];
 
     if (query.status) conditions.push(eq(inspections.status, query.status));
     if (query.vehicleHash) conditions.push(eq(inspections.vehicleHash, query.vehicleHash));
@@ -301,7 +273,14 @@ export class InspectionService {
 
     if (!inspection) throw new NotFoundError('Inspection not found');
     if (inspection.fixerId !== fixerId) throw new ForbiddenError('Only the assigned fixer can update inspection items');
-    if (inspection.status === 'COMPLETED') throw new ConflictError('Cannot update items on a completed inspection');
+
+    // Block updates on truly terminal statuses only
+    if (inspection.status === 'COMPLETED' || inspection.status === 'NEEDS_FOLLOWUP') {
+      throw new ConflictError(
+        `Cannot update items on an inspection marked as ${inspection.status}. ` +
+        `Only DRAFT or IN_PROGRESS inspections can be edited.`,
+      );
+    }
 
     const item = await db.query.inspectionItems.findFirst({
       where: and(
@@ -324,7 +303,6 @@ export class InspectionService {
       .where(eq(inspectionItems.id, item.id))
       .returning();
 
-    // Also bump inspection updatedAt
     await db
       .update(inspections)
       .set({ updatedAt: new Date() })
@@ -334,7 +312,7 @@ export class InspectionService {
   }
 
   // ----------------------------------------------------------
-  // BATCH UPDATE ITEMS — submit many at once
+  // BATCH UPDATE ITEMS
   // ----------------------------------------------------------
 
   async batchUpdateItems(
@@ -343,20 +321,19 @@ export class InspectionService {
     fixerId: string,
   ): Promise<InspectionItem[]> {
     const results: InspectionItem[] = [];
-
-    // Process sequentially to respect DB constraints
-    // Could be parallelised but serial is safer for FK checks
     for (const itemUpdate of input.items) {
       const updated = await this.updateItem(inspectionId, itemUpdate, fixerId);
       results.push(updated);
     }
-
     return results;
   }
 
   // ----------------------------------------------------------
   // COMPLETE INSPECTION
-  // Validates all items are checked, then marks as complete
+  //
+  // FIX: Accepts an explicit `outcome` field chosen by the fixer.
+  // No unchecked-item gate — fixer can finalise at any time.
+  // Summary required only for COMPLETED and NEEDS_FOLLOWUP.
   // ----------------------------------------------------------
 
   async completeInspection(
@@ -372,21 +349,21 @@ export class InspectionService {
     if (!inspection) throw new NotFoundError('Inspection not found');
     if (inspection.fixerId !== fixerId) throw new ForbiddenError();
 
-    // Only block if already in a terminal state
+    // Block re-submission of terminal statuses
     if (inspection.status === 'COMPLETED' || inspection.status === 'NEEDS_FOLLOWUP') {
       throw new ConflictError(
-        `Inspection is already marked as ${inspection.status}. ` +
+        `Inspection is already ${inspection.status}. ` +
         `Only DRAFT or IN_PROGRESS inspections can be updated.`,
       );
     }
 
-    // Require a summary for COMPLETED and NEEDS_FOLLOWUP outcomes
+    // Summary required for terminal outcomes
     if (
       (input.outcome === 'COMPLETED' || input.outcome === 'NEEDS_FOLLOWUP') &&
       (!input.summary || input.summary.trim().length < 5)
     ) {
       throw new BadRequestError(
-        'A summary is required when marking an inspection as COMPLETED or NEEDS_FOLLOWUP.',
+        `A summary is required when marking an inspection as ${input.outcome.replace('_', ' ').toLowerCase()}.`,
       );
     }
 
@@ -394,24 +371,17 @@ export class InspectionService {
       where: eq(inspectionItems.inspectionId, inspectionId),
     });
 
-    // Generate AI summary for completed/needs-followup outcomes — best effort, non-blocking
+    // AI summary — best effort, never blocks completion
     let aiSummary: string | null = inspection.aiSummary ?? null;
-    if (
-      env.ANTHROPIC_API_KEY &&
-      input.outcome !== 'DRAFT' &&
-      input.summary
-    ) {
+    if (env.ANTHROPIC_API_KEY && input.outcome !== 'DRAFT' && input.summary) {
       try {
         const ai = await getAiClient();
         if (ai) {
           const vehicleRes = await fetch(
             `${env.VEHICLE_SERVICE_URL}/vehicles/internal/lookup/${inspection.vehicleHash}`,
           );
-          const vehicleData = vehicleRes.ok
-            ? ((await vehicleRes.json()) as any).data
-            : null;
-
-          if (vehicleData) {
+          if (vehicleRes.ok) {
+            const vehicleData = ((await vehicleRes.json()) as any).data;
             const summaryResult = await ai.generateInspectionSummary({
               vehicle: {
                 make: vehicleData.make,
@@ -459,6 +429,7 @@ export class InspectionService {
 
   // ----------------------------------------------------------
   // CREATE FIX JOB FROM INSPECTION
+  // Allowed for COMPLETED and NEEDS_FOLLOWUP only.
   // ----------------------------------------------------------
 
   async createFixJob(
@@ -516,7 +487,7 @@ export class InspectionService {
     if (job.status === 'CANCELLED') throw new ConflictError('Cannot update a cancelled job');
     if (job.status === 'DELIVERED') throw new ConflictError('Cannot update a delivered job');
 
-    const setActualCompletion =
+    const completionFields =
       input.status === 'COMPLETED' && job.status !== 'COMPLETED'
         ? { actualCompletionAt: new Date() }
         : {};
@@ -525,7 +496,7 @@ export class InspectionService {
       .update(fixJobs)
       .set({
         ...input,
-        ...setActualCompletion,
+        ...completionFields,
         finalCost: input.finalCost?.toString(),
         updatedAt: new Date(),
       })
@@ -550,7 +521,6 @@ export class InspectionService {
     });
 
     if (!job) throw new NotFoundError('Fix job not found');
-
     if (requesterRole === 'OWNER' && job.ownerId !== requesterId) throw new ForbiddenError();
     if (requesterRole === 'FIXER' && job.fixerId !== requesterId) throw new ForbiddenError();
 
@@ -568,11 +538,9 @@ export class InspectionService {
   ): Promise<PaginatedResponse<FixJob>> {
     const { offset, limit, page } = parsePagination(query);
 
-    const conditions = requesterRole === 'OWNER'
-      ? [eq(fixJobs.ownerId, requesterId)]
-      : requesterRole === 'FIXER'
-        ? [eq(fixJobs.fixerId, requesterId)]
-        : [];
+    const conditions =
+      requesterRole === 'OWNER' ? [eq(fixJobs.ownerId, requesterId)] :
+      requesterRole === 'FIXER' ? [eq(fixJobs.fixerId, requesterId)] : [];
 
     if (query.status) conditions.push(eq(fixJobs.status, query.status));
 
