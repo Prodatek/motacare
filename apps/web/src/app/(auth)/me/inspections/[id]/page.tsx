@@ -100,7 +100,7 @@ export default function InspectionDetailPage() {
     }
     setIsCompleting(true);
     try {
-      await inspectionApi.complete(id, summaryText);
+      await inspectionApi.complete(id, 'COMPLETED', summaryText);
       toast.success('Inspection completed successfully');
       router.push('/dashboard/inspections');
     } catch (error) {
