@@ -96,6 +96,8 @@ jobs:
             dockerfile: infra/docker/api-gateway.Dockerfile
           - service: web
             dockerfile: infra/docker/web.Dockerfile
+          - service: fix-jobs
+            dockerfile: infra/docker/fix-jobs.Dockerfile
 
     steps:
       - name: Checkout code
