@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, XCircle, AlertTriangle, Minus, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { inspectionApi, ApiClientError } from '@/lib/api';
+import { inspectionApi, fixJobApi, ApiClientError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { cn, severityColour, statusColour, formatDate } from '@/lib/utils';
 
@@ -41,6 +41,11 @@ export default function InspectionDetailPage() {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [summaryText, setSummaryText] = useState('');
   const [isCompleting, setIsCompleting] = useState(false);
+  const [isCreatingJob, setIsCreatingJob] = useState(false);
+  const [jobDescription, setJobDescription] = useState('');
+  const [jobEstimatedCost, setJobEstimatedCost] = useState<string>('');
+  const [jobEstimatedCompletionAt, setJobEstimatedCompletionAt] = useState<string>('');
+  const [jobCurrency, setJobCurrency] = useState('NGN');
 
   const isFixer = user?.role === 'FIXER' || user?.role === 'ADMIN';
   const isEditable = isFixer && (inspection?.status === 'IN_PROGRESS' || inspection?.status === 'DRAFT');
@@ -312,6 +317,82 @@ export default function InspectionDetailPage() {
           {inspection.completedAt && (
             <p className="text-xs text-gray-400 mt-3">Completed {formatDate(inspection.completedAt)}</p>
           )}
+        </div>
+      )}
+
+      {/* Create Fix Job (visible for completed/follow-up inspections to assigned fixer) */}
+      {isFixer && (inspection.status === 'COMPLETED' || inspection.status === 'NEEDS_FOLLOWUP') && (
+        <div className="card p-6 mt-4">
+          <h3 className="font-semibold text-gray-900 mb-3">Create fix job</h3>
+          <p className="text-sm text-gray-500 mb-3">Create a repair job from this inspection so the owner can approve and pay.</p>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Description</label>
+              <textarea
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                rows={3}
+                className="input resize-none"
+                placeholder="Brief description of the work required…"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Estimated cost</label>
+                <input type="number" value={jobEstimatedCost} onChange={(e) => setJobEstimatedCost(e.target.value)} className="input" placeholder="0.00" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Currency</label>
+                <select value={jobCurrency} onChange={(e) => setJobCurrency(e.target.value)} className="input">
+                  <option>NGN</option>
+                  <option>USD</option>
+                  <option>EUR</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Est. completion</label>
+                <input type="date" value={jobEstimatedCompletionAt} onChange={(e) => setJobEstimatedCompletionAt(e.target.value)} className="input" />
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  if (!jobDescription || jobDescription.length < 10) {
+                    toast.error('Please provide a description of at least 10 characters');
+                    return;
+                  }
+                  setIsCreatingJob(true);
+                  try {
+                    const payload = {
+                      inspectionId: inspection.id,
+                      vehicleHash: inspection.vehicleHash,
+                      ownerId: inspection.ownerId,
+                      description: jobDescription,
+                      estimatedCompletionAt: jobEstimatedCompletionAt || undefined,
+                      estimatedCost: jobEstimatedCost ? Number(jobEstimatedCost) : undefined,
+                      currency: jobCurrency,
+                    };
+                    const job = await fixJobApi.createFixJob(payload);
+                    toast.success('Fix job created');
+                    router.push(`/dashboard/fix-jobs/${job.id}`);
+                  } catch (err) {
+                    if (err instanceof ApiClientError) toast.error(err.message);
+                    else toast.error('Failed to create fix job');
+                  } finally {
+                    setIsCreatingJob(false);
+                  }
+                }}
+                disabled={isCreatingJob}
+                className="btn-primary"
+              >
+                {isCreatingJob ? 'Creating…' : 'Create fix job'}
+              </button>
+              <button onClick={() => { setJobDescription(''); setJobEstimatedCost(''); setJobEstimatedCompletionAt(''); }} className="btn-secondary">Reset</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
