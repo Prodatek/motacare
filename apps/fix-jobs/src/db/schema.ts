@@ -1,6 +1,6 @@
 import {
   pgTable, uuid, varchar, text, integer,
-  boolean, timestamp, pgEnum, index, decimal,
+  boolean, timestamp, pgEnum, index, decimal, jsonb,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -19,8 +19,6 @@ export const fixJobStatusEnum = pgEnum('fix_job_status', [
 
 // ============================================================
 // FIX JOBS TABLE
-// Owns the full lifecycle of a repair job from creation
-// through to vehicle delivery back to the owner.
 // ============================================================
 
 export const fixJobs = pgTable(
@@ -34,48 +32,48 @@ export const fixJobs = pgTable(
     fixerId: uuid('fixer_id').notNull(),
     ownerId: uuid('owner_id').notNull(),
 
-    // Job details
+    // Core fields
     status: fixJobStatusEnum('status').notNull().default('PENDING'),
     description: text('description').notNull(),
+    repairNotes: text('repair_notes'),
+    cancelReason: text('cancel_reason'),           // set when status → CANCELLED
 
-    // Timing — drives the alert system (Phase 2 Stage 2)
+    // Timing
     estimatedCompletionAt: timestamp('estimated_completion_at'),
-    actualCompletionAt: timestamp('actual_completion_at'),
+    actualCompletionAt:    timestamp('actual_completion_at'),
 
-    // Cost tracking
+    // Cost
     estimatedCost: decimal('estimated_cost', { precision: 10, scale: 2 }),
-    finalCost: decimal('final_cost', { precision: 10, scale: 2 }),
+    finalCost:     decimal('final_cost', { precision: 10, scale: 2 }),
     currency: varchar('currency', { length: 3 }).notNull().default('NGN'),
 
-    // Fixer notes on the repair work
-    repairNotes: text('repair_notes'),
+    // Parts — JSON array of { name, quantity, unitCost }
+    partsUsed: jsonb('parts_used')
+      .$type<Array<{ name: string; quantity: number; unitCost: number }>>()
+      .default([]),
 
-    // Alert tracking flags — set true once each alert fires
-    // Prevents duplicate alerts on queue retry
-    alertSent24h: boolean('alert_sent_24h').notNull().default(false),
-    alertSent1h: boolean('alert_sent_1h').notNull().default(false),
+    // Alert tracking flags (Phase 2)
+    alertSent24h:    boolean('alert_sent_24h').notNull().default(false),
+    alertSent1h:     boolean('alert_sent_1h').notNull().default(false),
     alertSentOverdue: boolean('alert_sent_overdue').notNull().default(false),
 
-    // Owner acknowledgement
     ownerNotifiedAt: timestamp('owner_notified_at'),
 
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
-    vehicleHashIdx: index('fix_jobs_vehicle_hash_idx').on(table.vehicleHash),
-    fixerIdx: index('fix_jobs_fixer_idx').on(table.fixerId),
-    ownerIdx: index('fix_jobs_owner_idx').on(table.ownerId),
-    statusIdx: index('fix_jobs_status_idx').on(table.status),
-    estimatedIdx: index('fix_jobs_estimated_completion_idx').on(table.estimatedCompletionAt),
-    inspectionIdx: index('fix_jobs_inspection_idx').on(table.inspectionId),
+    vehicleHashIdx:    index('fix_jobs_vehicle_hash_idx').on(table.vehicleHash),
+    fixerIdx:          index('fix_jobs_fixer_idx').on(table.fixerId),
+    ownerIdx:          index('fix_jobs_owner_idx').on(table.ownerId),
+    statusIdx:         index('fix_jobs_status_idx').on(table.status),
+    estimatedIdx:      index('fix_jobs_estimated_completion_idx').on(table.estimatedCompletionAt),
+    inspectionIdx:     index('fix_jobs_inspection_idx').on(table.inspectionId),
   }),
 );
 
 // ============================================================
-// STATUS HISTORY TABLE
-// Immutable log of every status change on a job.
-// Gives owners full transparency and supports dispute resolution.
+// STATUS HISTORY
 // ============================================================
 
 export const fixJobStatusHistory = pgTable(
@@ -86,10 +84,10 @@ export const fixJobStatusHistory = pgTable(
       .notNull()
       .references(() => fixJobs.id, { onDelete: 'cascade' }),
     fromStatus: fixJobStatusEnum('from_status'),
-    toStatus: fixJobStatusEnum('to_status').notNull(),
-    changedBy: uuid('changed_by').notNull(), // user ID
-    notes: text('notes'),
-    changedAt: timestamp('changed_at').notNull().defaultNow(),
+    toStatus:   fixJobStatusEnum('to_status').notNull(),
+    changedBy:  uuid('changed_by').notNull(),
+    notes:      text('notes'),
+    changedAt:  timestamp('changed_at').notNull().defaultNow(),
   },
   (table) => ({
     fixJobIdx: index('status_history_fix_job_idx').on(table.fixJobId),
@@ -119,3 +117,4 @@ export type FixJob = typeof fixJobs.$inferSelect;
 export type NewFixJob = typeof fixJobs.$inferInsert;
 export type FixJobStatusHistory = typeof fixJobStatusHistory.$inferSelect;
 export type FixJobStatus = 'PENDING' | 'IN_PROGRESS' | 'AWAITING_PARTS' | 'COMPLETED' | 'DELIVERED' | 'CANCELLED';
+export type PartEntry = { name: string; quantity: number; unitCost: number };

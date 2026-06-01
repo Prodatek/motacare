@@ -2,8 +2,6 @@ import { z } from 'zod';
 
 // ============================================================
 // CREATE FIX JOB
-// Called by inspection-service (or fixer directly) after a
-// completed inspection reveals issues needing repair.
 // ============================================================
 
 export const createFixJobSchema = z.object({
@@ -17,8 +15,7 @@ export const createFixJobSchema = z.object({
 });
 
 // ============================================================
-// UPDATE FIX JOB
-// Fixer updates status, cost, notes as work progresses.
+// UPDATE FIX JOB — general fields (status, notes, cost, timing)
 // ============================================================
 
 export const updateFixJobSchema = z.object({
@@ -29,7 +26,33 @@ export const updateFixJobSchema = z.object({
   estimatedCompletionAt: z.coerce.date().nullable().optional(),
   finalCost: z.number().min(0).optional(),
   repairNotes: z.string().max(2000).nullable().optional(),
-  notes: z.string().max(500).optional(), // status change note for history
+  notes: z.string().max(500).optional(),        // note logged in status history
+});
+
+// ============================================================
+// ADD PART — adds one part to the partsUsed JSON array
+// ============================================================
+
+export const addPartSchema = z.object({
+  name: z.string().min(1, 'Part name is required').max(200),
+  quantity: z.number().int().min(1, 'Quantity must be at least 1'),
+  unitCost: z.number().min(0, 'Unit cost must be 0 or greater'),
+});
+
+// ============================================================
+// REMOVE PART — removes by index in the partsUsed array
+// ============================================================
+
+export const removePartSchema = z.object({
+  partIndex: z.number().int().min(0, 'Invalid part index'),
+});
+
+// ============================================================
+// CANCEL JOB — requires a reason
+// ============================================================
+
+export const cancelFixJobSchema = z.object({
+  reason: z.string().min(5, 'Please provide a cancellation reason').max(500),
 });
 
 // ============================================================
@@ -50,6 +73,9 @@ export const fixJobQuerySchema = z.object({
 // INFERRED TYPES
 // ============================================================
 
-export type CreateFixJobInput = z.infer<typeof createFixJobSchema>;
-export type UpdateFixJobInput = z.infer<typeof updateFixJobSchema>;
-export type FixJobQueryInput = z.infer<typeof fixJobQuerySchema>;
+export type CreateFixJobInput   = z.infer<typeof createFixJobSchema>;
+export type UpdateFixJobInput   = z.infer<typeof updateFixJobSchema>;
+export type AddPartInput        = z.infer<typeof addPartSchema>;
+export type RemovePartInput     = z.infer<typeof removePartSchema>;
+export type CancelFixJobInput   = z.infer<typeof cancelFixJobSchema>;
+export type FixJobQueryInput    = z.infer<typeof fixJobQuerySchema>;

@@ -7,8 +7,8 @@ import { FixJobService } from './fix-jobs.service';
 // Prefix: /fix-jobs (set in main.ts)
 //
 // Role matrix:
-//   FIXER  — create, update status, add repair notes
-//   OWNER  — read their own jobs
+//   FIXER  — create, update, add/remove parts, cancel
+//   OWNER  — read own jobs, cancel own job
 //   ADMIN  — full access
 // ============================================================
 
@@ -16,36 +16,25 @@ export async function fixJobRoutes(fastify: FastifyInstance) {
   const service = new FixJobService();
   const controller = new FixJobController(service);
 
-  const auth = { onRequest: [fastify.authenticate] };
-  const fixerOrAdmin = { onRequest: [fastify.requireRole('FIXER', 'ADMIN')] };
+  const auth        = { onRequest: [fastify.authenticate] };
+  const fixerAdmin  = { onRequest: [fastify.requireRole('FIXER', 'ADMIN')] };
+  const allRoles    = { onRequest: [fastify.authenticate] }; // owner + fixer + admin
 
-  // POST /fix-jobs — create a new fix job
-  fastify.post('/', {
-    ...fixerOrAdmin,
-    schema: { tags: ['Fix Jobs'], summary: 'Create a new fix job', security: [{ bearerAuth: [] }] },
-  }, (req, rep) => controller.create(req, rep));
+  const tag = { schema: { tags: ['Fix Jobs'], security: [{ bearerAuth: [] }] } };
 
-  // GET /fix-jobs — list jobs (scoped to caller's role)
-  fastify.get('/', {
-    ...auth,
-    schema: { tags: ['Fix Jobs'], summary: 'List fix jobs for the authenticated user', security: [{ bearerAuth: [] }] },
-  }, (req, rep) => controller.list(req, rep));
+  // Core CRUD
+  fastify.post('/',    { ...fixerAdmin, ...tag }, (req, rep) => controller.create(req, rep));
+  fastify.get('/',    { ...allRoles, ...tag },    (req, rep) => controller.list(req, rep));
+  fastify.get('/:id', { ...allRoles, ...tag },    (req: any, rep) => controller.getOne(req, rep));
+  fastify.patch('/:id', { ...fixerAdmin, ...tag },(req: any, rep) => controller.update(req, rep));
 
-  // GET /fix-jobs/:id — get a single job with status history
-  fastify.get('/:id', {
-    ...auth,
-    schema: { tags: ['Fix Jobs'], summary: 'Get a fix job with full status history', security: [{ bearerAuth: [] }] },
-  }, (req, rep) => controller.getOne(req as any, rep));
+  // Cancel — both owner and fixer can cancel
+  fastify.post('/:id/cancel', { ...allRoles, ...tag }, (req: any, rep) => controller.cancel(req, rep));
 
-  // PATCH /fix-jobs/:id — update status, cost, notes
-  fastify.patch('/:id', {
-    ...fixerOrAdmin,
-    schema: { tags: ['Fix Jobs'], summary: 'Update fix job status or details', security: [{ bearerAuth: [] }] },
-  }, (req, rep) => controller.update(req as any, rep));
+  // Parts management (fixer only)
+  fastify.post('/:id/parts',         { ...fixerAdmin, ...tag }, (req: any, rep) => controller.addPart(req, rep));
+  fastify.delete('/:id/parts/:index', { ...fixerAdmin, ...tag }, (req: any, rep) => controller.removePart(req, rep));
 
-  // GET /fix-jobs/:id/history — full status change log
-  fastify.get('/:id/history', {
-    ...auth,
-    schema: { tags: ['Fix Jobs'], summary: 'Get fix job status history', security: [{ bearerAuth: [] }] },
-  }, (req, rep) => controller.getHistory(req as any, rep));
+  // Status history audit log
+  fastify.get('/:id/history', { ...allRoles, ...tag }, (req: any, rep) => controller.getHistory(req, rep));
 }
