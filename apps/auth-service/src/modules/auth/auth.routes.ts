@@ -151,4 +151,39 @@ export async function authRoutes(fastify: FastifyInstance) {
       return reply.status(200).send({ statusCode: 200, data: user });
     },
   );
+
+  // Internal: look up a user by ID (used by other services to display names)
+  fastify.get(
+    '/internal/user/:id',
+    {
+      schema: {
+        tags: ['Internal'],
+        summary: 'Internal: look up a user by id',
+        hide: true,
+        params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { id } = request.params as { id: string };
+        const { eq } = await import('drizzle-orm');
+        const { db } = await import('../../db');
+        const { users } = await import('../../db/schema');
+
+        const user = await db.query.users.findFirst({
+          where: eq(users.id, id),
+          columns: { id: true, firstName: true, lastName: true, role: true, isActive: true },
+        });
+
+        if (!user || !user.isActive) {
+          return reply.status(404).send({ statusCode: 404, error: 'Not Found', message: 'User not found' });
+        }
+
+        return reply.status(200).send({ statusCode: 200, data: user });
+      } catch (err) {
+        console.error('Internal user lookup failed:', err);
+        return reply.status(500).send({ statusCode: 500, error: 'Internal Server Error', message: 'Lookup failed' });
+      }
+    },
+  );
 }

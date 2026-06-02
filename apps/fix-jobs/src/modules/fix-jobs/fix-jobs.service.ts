@@ -98,7 +98,7 @@ export class FixJobService {
     jobId: string,
     requesterId: string,
     requesterRole: string,
-  ): Promise<FixJob & { statusHistory: FixJobStatusHistory[] }> {
+  ): Promise<FixJob & { statusHistory: FixJobStatusHistory[] } & { fixer?: any; vehicle?: any }> {
 
     const job = await db.query.fixJobs.findFirst({
       where: eq(fixJobs.id, jobId),
@@ -110,7 +110,30 @@ export class FixJobService {
     if (requesterRole === 'OWNER' && job.ownerId !== requesterId) throw new ForbiddenError();
     if (requesterRole === 'FIXER' && job.fixerId !== requesterId) throw new ForbiddenError();
 
-    return job as FixJob & { statusHistory: FixJobStatusHistory[] };
+    // Enrich with fixer name and vehicle details (best-effort, non-blocking)
+    let fixerInfo: any = null;
+    let vehicleInfo: any = null;
+    try {
+      const { env } = await import('../../config/env');
+      const [fixerRes, vehicleRes] = await Promise.all([
+        fetch(`${env.AUTH_SERVICE_URL}/auth/internal/user/${job.fixerId}`),
+        fetch(`${env.VEHICLE_SERVICE_URL}/vehicles/internal/lookup/${job.vehicleHash}`),
+      ]);
+
+      if (fixerRes.ok) {
+        const body = (await fixerRes.json()) as { data: any };
+        fixerInfo = body.data;
+      }
+      if (vehicleRes.ok) {
+        const body = (await vehicleRes.json()) as { data: any };
+        vehicleInfo = body.data;
+      }
+    } catch (err) {
+      // best-effort: don't fail the request if external lookups fail
+      console.warn('[fix-jobs] enrichment lookup failed:', err);
+    }
+
+    return { ...(job as any), fixer: fixerInfo, vehicle: vehicleInfo } as FixJob & { statusHistory: FixJobStatusHistory[] } & { fixer?: any; vehicle?: any };
   }
 
   // ----------------------------------------------------------

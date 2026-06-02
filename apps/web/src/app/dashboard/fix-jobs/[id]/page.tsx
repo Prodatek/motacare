@@ -57,7 +57,8 @@ export default function FixJobDetailPage() {
   useEffect(() => {
     fixJobApi.get(id)
       .then((res) => {
-        setJob(res as FixJobWithHistory);
+        // API now enriches job with `fixer` and `vehicle` fields — accept them as any
+        setJob(res as any);
         setRepairNotes((res as any).repairNotes ?? '');
         setFinalCost((res as any).finalCost ?? '');
       })
@@ -130,6 +131,14 @@ export default function FixJobDetailPage() {
               <span className="text-xs text-gray-400">{formatDate(job.createdAt)}</span>
             </div>
             <p className="text-base font-medium text-gray-900">{job.description}</p>
+            <div className="text-sm text-gray-500 mt-1">
+              {job.fixer && (
+                <div>Fixer: {job.fixer.firstName} {job.fixer.lastName}</div>
+              )}
+              {job.vehicle && (
+                <div>Vehicle: {job.vehicle.make} {job.vehicle.model} {job.vehicle.year ? `(${job.vehicle.year})` : ''}</div>
+              )}
+            </div>
           </div>
         </div>
 
