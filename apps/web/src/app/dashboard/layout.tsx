@@ -1,21 +1,20 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Car, ClipboardCheck, LayoutDashboard,
-  LogOut, Settings, Wrench, Menu, X
+  LogOut, Wrench, Menu, X,
 } from 'lucide-react';
-import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { cn, getInitials } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Vehicles', href: '/dashboard/vehicles', icon: Car },
-  { label: 'Inspections', href: '/dashboard/inspections', icon: ClipboardCheck },
-  { label: 'Fix Jobs', href: '/dashboard/fix-jobs', icon: Wrench },
+  { label: 'Dashboard',   href: '/dashboard',              icon: LayoutDashboard },
+  { label: 'Vehicles',    href: '/dashboard/vehicles',     icon: Car },
+  { label: 'Inspections', href: '/dashboard/inspections',  icon: ClipboardCheck },
+  { label: 'Fix Jobs',    href: '/dashboard/fix-jobs',     icon: Wrench },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -29,6 +28,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       router.push('/login');
     }
   }, [isLoading, isAuthenticated, router]);
+
+  // Close sidebar on route change
+  useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
   if (isLoading) {
     return (
@@ -53,18 +55,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       )}
 
-      {/* Sidebar */}
+      {/* ── Sidebar ── */}
       <aside className={cn(
         'fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 flex flex-col transition-transform duration-200 lg:static lg:translate-x-0',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full',
       )}>
-        {/* Logo */}
+
+        {/* Logo — clicking navigates to dashboard home */}
         <div className="flex items-center gap-2 px-6 py-5 border-b border-gray-100">
-          <Car className="h-6 w-6 text-brand-600 shrink-0" />
-          <span className="text-lg font-bold text-gray-900">Motacare</span>
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2 flex-1 min-w-0 hover:opacity-80 transition-opacity"
+          >
+            <Car className="h-6 w-6 text-brand-600 shrink-0" />
+            <span className="text-lg font-bold text-gray-900 truncate">Motacare</span>
+          </Link>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="ml-auto lg:hidden text-gray-400 hover:text-gray-600"
+            className="lg:hidden text-gray-400 hover:text-gray-600 shrink-0"
           >
             <X className="h-5 w-5" />
           </button>
@@ -73,12 +81,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
-            const active = pathname === href || pathname.startsWith(`${href}/`);
+            const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
             return (
               <Link
                 key={href}
                 href={href}
-                onClick={() => setSidebarOpen(false)}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                   active
@@ -93,7 +100,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        {/* User Footer */}
+        {/* User footer */}
         <div className="border-t border-gray-100 p-4">
           <div className="flex items-center gap-3 mb-3">
             <div className="h-9 w-9 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-semibold text-sm shrink-0">
@@ -116,20 +123,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* Main content */}
+      {/* ── Main area ── */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Topbar (mobile) */}
-        <header className="lg:hidden sticky top-0 z-10 flex items-center gap-3 bg-white border-b border-gray-200 px-4 py-3">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-          <div className="flex items-center gap-1.5">
-            <Car className="h-5 w-5 text-brand-600" />
-            <span className="font-bold text-gray-900">Motacare</span>
+
+        {/* Mobile topbar */}
+        <header className="lg:hidden sticky top-0 z-10 flex items-center justify-between bg-white border-b border-gray-200 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            {/* Logo on mobile topbar — also links to dashboard */}
+            <Link href="/dashboard" className="flex items-center gap-1.5 hover:opacity-80 transition-opacity">
+              <Car className="h-5 w-5 text-brand-600" />
+              <span className="font-bold text-gray-900">Motacare</span>
+            </Link>
           </div>
+
+          {/* Sign-out visible on mobile topbar */}
+          <button
+            onClick={logout}
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="hidden sm:inline">Sign out</span>
+          </button>
         </header>
 
         <main className="flex-1 p-6 lg:p-8">
