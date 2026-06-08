@@ -1,3 +1,8 @@
 {
-  "name": "@motacare/shared-types"
+  "name": "@motacare/shared-types",
+  "scripts": {
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
+  }
 }
