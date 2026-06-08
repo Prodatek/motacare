@@ -29,7 +29,7 @@ jobs:
   # ──────────────────────────────────────────────────────────
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -56,7 +56,7 @@ jobs:
   # ──────────────────────────────────────────────────────────
   typecheck:
     name: Type Check
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -87,7 +87,7 @@ jobs:
   # ──────────────────────────────────────────────────────────
   test:
     name: Test — ${{ matrix.service }}
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
       # Run all services in parallel — fail-fast: false means
       # we see ALL failing services, not just the first one
@@ -98,6 +98,7 @@ jobs:
           - apps/auth-service
           - apps/vehicle-service
           - apps/inspection-service
+          - apps/fix-jobs
 
     steps:
       - name: Checkout code
@@ -148,7 +149,7 @@ jobs:
   # ──────────────────────────────────────────────────────────
   docker-build:
     name: Docker Build — ${{ matrix.service }}
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
@@ -187,7 +188,7 @@ jobs:
   # ──────────────────────────────────────────────────────────
   pr-summary:
     name: PR Summary
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [lint, typecheck, test, docker-build]
     if: always()
     steps:
