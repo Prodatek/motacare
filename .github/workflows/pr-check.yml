@@ -1,4 +1,4 @@
-name: PR Check
+name: PR Check n test
 
 # ============================================================
 # Triggers on every pull request targeting dev or staging.
