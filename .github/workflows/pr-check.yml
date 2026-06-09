@@ -265,51 +265,60 @@ jobs:
   # Uses local BuildKit cache on the self-hosted runner disk —
   # repeated builds only rebuild changed layers.
   # ============================================================
-  docker-build:
+   docker-build:
     name: Docker / ${{ matrix.service }}
     runs-on: self-hosted
-    needs: shared-packages
-    timeout-minutes: 12
-
+    needs: setup
+    timeout-minutes: 15
+ 
     strategy:
       fail-fast: false
       matrix:
         include:
-          - service: auth-service
-            dockerfile: infra/docker/auth-service.Dockerfile
-          - service: vehicle-service
-            dockerfile: infra/docker/vehicle-service.Dockerfile
-          - service: inspection-service
-            dockerfile: infra/docker/inspection-service.Dockerfile
-          - service: fix-jobs
-            dockerfile: infra/docker/fix-jobs.Dockerfile
-          - service: api-gateway
-            dockerfile: infra/docker/api-gateway.Dockerfile
-
+          - { service: auth-service,       dockerfile: infra/docker/auth-service.Dockerfile       }
+          - { service: vehicle-service,    dockerfile: infra/docker/vehicle-service.Dockerfile    }
+          - { service: inspection-service, dockerfile: infra/docker/inspection-service.Dockerfile }
+          - { service: fix-jobs,           dockerfile: infra/docker/fix-jobs.Dockerfile           }
+          - { service: api-gateway,        dockerfile: infra/docker/api-gateway.Dockerfile        }
+ 
     steps:
       - uses: actions/checkout@v4
-
-      # BuildKit is built into Docker 23+ — no action needed to install it.
-      # DOCKER_BUILDKIT=1 enables it explicitly for older Docker versions.
-      - name: Build image (no push) — ${{ matrix.service }}
-        env:
-          DOCKER_BUILDKIT: '1'
+ 
+      # Create builder with docker-container driver if it doesn't exist.
+      # This is the driver that supports --cache-to type=local.
+      # `|| true` is intentional — create fails if builder already exists.
+      - name: Ensure docker-container buildx builder
         run: |
-          docker build \
-            --file ${{ matrix.dockerfile }} \
-            --target production \
-            --tag motacare/${{ matrix.service }}:pr-${{ github.event.pull_request.number }} \
+          docker buildx inspect motacare-builder > /dev/null 2>&1 || \
+            docker buildx create \
+              --name motacare-builder \
+              --driver docker-container \
+              --bootstrap
+          docker buildx use motacare-builder
+          echo "Builder ready:"
+          docker buildx inspect | grep -E "Name:|Driver:|Status:"
+ 
+      # --load imports the built image into the local docker daemon.
+      # Required when using docker-container driver (images don't
+      # automatically appear in `docker images` without --load).
+      - name: Build — ${{ matrix.service }}
+        run: |
+          docker buildx build \
+            --builder motacare-builder \
+            --file    ${{ matrix.dockerfile }} \
+            --target  production \
+            --tag     motacare/${{ matrix.service }}:pr-${{ github.event.pull_request.number }} \
             --cache-from type=local,src=/tmp/buildkit-cache/${{ matrix.service }} \
             --cache-to   type=local,dest=/tmp/buildkit-cache/${{ matrix.service }},mode=max \
-            --build-arg BUILD_SHA=${{ github.sha }} \
+            --build-arg  BUILD_SHA=${{ github.sha }} \
+            --load \
             --progress plain \
             .
-
-      # Clean up the tagged image after the check — keep the runner disk tidy
+ 
       - name: Remove image
         if: always()
         run: docker rmi motacare/${{ matrix.service }}:pr-${{ github.event.pull_request.number }} || true
-
+ 
   # ============================================================
   # JOB 5 — PR SUMMARY
   # Posts a status table as a PR comment.
