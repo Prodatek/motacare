@@ -1,12 +1,12 @@
 {
   "name": "@motacare/shared-types",
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "npm run build",
-    "test": "npm run test",
-    "lint": "npm run lint",
+    "dev": "tsc --watch",
+    "build": "tsc",
+    "test": "echo \"No tests defined\"",
+    "lint": "echo \"No linter configured\"",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "clean": "npm run clean && rm -rf node_modules"
+    "clean": "rm -rf dist node_modules"
   },
   "devDependencies": {
     "turbo": "^2.0.0",
