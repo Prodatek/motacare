@@ -1,13 +1,15 @@
 name: PR Check
 
 # ============================================================
-# Runs on every PR targeting dev, staging, or main.
-# Self-hosted runner — all caching is local disk (no network).
+# Runs on every pull request targeting dev, staging, or main.
+# Uses a self-hosted runner — caching is on local disk, not
+# GitHub's cache service, so hits are near-instant.
 #
-# Pipeline:
-#   setup → lint, typecheck, test, docker-build → pr-summary
+# Pipeline order (all jobs run in parallel unless noted):
+#   shared-packages → lint, typecheck, test, docker-build
+#   All four → pr-summary
 #
-# Warm runner target: < 3 minutes end-to-end.
+# Total wall-clock target on a warm runner: < 3 minutes.
 # ============================================================
 
 on:
@@ -15,6 +17,7 @@ on:
     branches: [dev, staging, main]
     types: [opened, synchronize, reopened]
 
+# Cancel in-progress runs for the same PR on new push
 concurrency:
   group: pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -23,8 +26,12 @@ defaults:
   run:
     shell: bash
 
+# ============================================================
+# ENVIRONMENT — shared across all jobs
+# ============================================================
 env:
-  NODE_ENV: test
+  NODE_VERSION: '20'
+  # Dummy values so env-validation doesn't exit(1) during tests
   JWT_SECRET: ci-test-secret-minimum-32-characters-ok
   VEHICLE_HASH_SECRET: ci-test-hash-secret-32-chars-minimum
   POSTGRES_USER: ci
@@ -36,31 +43,36 @@ env:
   VEHICLE_SERVICE_URL: http://localhost:3002
   INSPECTION_SERVICE_URL: http://localhost:3003
   FIX_JOBS_SERVICE_URL: http://localhost:3004
-
+  NODE_ENV: test
 jobs:
   # ============================================================
-  # JOB 0 — SETUP
-  # Single npm ci. Builds shared packages. Everything cached.
+  # JOB 0 — BUILD SHARED PACKAGES
+  # Everything else depends on shared-types and shared-utils
+  # being compiled first. One install, one build, shared via cache.
   # ============================================================
-  setup:
-    name: Setup
+  shared-packages:
+    name: Build shared packages
     runs-on: self-hosted
-    timeout-minutes: 10
+    timeout-minutes: 8
+
     outputs:
       cache-key: ${{ steps.cache-key.outputs.key }}
-    steps:
-      - uses: actions/checkout@v4
 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Deterministic cache key: hash of every package.json + lock file
       - name: Compute cache key
         id: cache-key
         run: |
-          KEY="node-${{ runner.os }}-$(cat package-lock.json \
-            $(find packages apps -name 'package.json' \
-              -not -path '*/node_modules/*' | sort) \
-            | sha256sum | cut -c1-16)"
+          KEY="node-${{ runner.os }}-$(cat package-lock.json packages/*/package.json apps/*/package.json | sha256sum | cut -c1-16)"
           echo "key=$KEY" >> $GITHUB_OUTPUT
+          echo "Cache key: $KEY"
 
-      - name: Restore node_modules
+      # Restore node_modules from local runner disk cache.
+      # On self-hosted runners this is a local directory — no network I/O.
+      - name: Restore node_modules cache
         id: cache-nm
         uses: actions/cache@v4
         with:
@@ -69,47 +81,40 @@ jobs:
             packages/*/node_modules
             apps/*/node_modules
           key: ${{ steps.cache-key.outputs.key }}
-          restore-keys: node-${{ runner.os }}-
+          restore-keys: |
+            node-${{ runner.os }}-
 
-      - name: Install dependencies
+      - name: Install dependencies (cache miss only)
         if: steps.cache-nm.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline
 
-      - name: Build shared packages
-        run: |
-          npm run build --workspace=packages/shared-types
-          npm run build --workspace=packages/shared-utils
+      # Build shared packages — downstream jobs need the compiled dist/
+      - name: Build shared-types
+        run: npm run build --workspace=packages/shared-types
 
+      - name: Build shared-utils
+        run: npm run build --workspace=packages/shared-utils
+
+      # Cache the built dist/ directories so downstream jobs don't rebuild
       - name: Cache built packages
         uses: actions/cache@v4
         with:
           path: |
             packages/shared-types/dist
             packages/shared-utils/dist
-          key: built-${{ github.sha }}
+          key: built-packages-${{ github.sha }}
 
   # ============================================================
   # JOB 1 — LINT
-  #
-  # BUG FIX: eslint was not declared as a dependency anywhere —
-  # not in root package.json and not in any service package.json.
-  # This caused `eslint: not found` (exit 127) on every service.
-  #
-  # Solution: invoke eslint via its full local path
-  # (./node_modules/.bin/eslint) rather than relying on PATH.
-  # Also added a preflight check that prints a clear fix message
-  # if eslint still isn't installed.
-  #
-  # PERMANENT FIX: add to root package.json devDependencies:
-  #   "eslint": "^8.57.0"
-  #   "@typescript-eslint/parser": "^7.0.0"
-  #   "@typescript-eslint/eslint-plugin": "^7.0.0"
+  # Fast — runs ESLint and Prettier check.
+  # No DB, no build output needed beyond shared packages.
   # ============================================================
   lint:
     name: Lint
     runs-on: self-hosted
-    needs: setup
-    timeout-minutes: 6
+    needs: shared-packages
+    timeout-minutes: 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -120,49 +125,26 @@ jobs:
             node_modules
             packages/*/node_modules
             apps/*/node_modules
-          key: ${{ needs.setup.outputs.cache-key }}
+          key: ${{ needs.shared-packages.outputs.cache-key }}
           fail-on-cache-miss: true
 
-      # Fail early with a clear message if eslint isn't installed
-      - name: Verify eslint available
-        run: |
-          if ! ./node_modules/.bin/eslint --version > /dev/null 2>&1; then
-            echo "::error::eslint not found. Add to root package.json devDependencies:"
-            echo "::error::  \"eslint\": \"^8.57.0\""
-            echo "::error::  \"@typescript-eslint/parser\": \"^7.0.0\""
-            echo "::error::  \"@typescript-eslint/eslint-plugin\": \"^7.0.0\""
-            exit 1
-          fi
-          echo "eslint $(./node_modules/.bin/eslint --version)"
-
-      # Run via full path so runner PATH doesn't matter
       - name: ESLint
-        run: |
-          ESLINT=./node_modules/.bin/eslint
-          failed=0
-          for svc in apps/*/src packages/*/src; do
-            [ -d "$svc" ] || continue
-            echo "→ $svc"
-            $ESLINT "$svc" --ext .ts,.tsx \
-              2>&1 | sed "s|^|[$svc] |" || failed=$((failed+1))
-          done
-          [ $failed -eq 0 ] || { echo "::error::$failed package(s) failed lint"; exit 1; }
+        run: npm run lint
 
       - name: Prettier check
-        run: |
-          ./node_modules/.bin/prettier \
-            --check "**/*.{ts,tsx,json}" \
-            --ignore-path .gitignore || true
+        run: npx prettier --check "**/*.{ts,tsx,json}" --ignore-path .gitignore
 
   # ============================================================
   # JOB 2 — TYPE CHECK
-  # All services in parallel background processes.
+  # tsc --noEmit on each service.
+  # Needs built shared packages for path alias resolution.
   # ============================================================
   typecheck:
     name: Type check
     runs-on: self-hosted
-    needs: setup
+    needs: shared-packages
     timeout-minutes: 8
+
     steps:
       - uses: actions/checkout@v4
 
@@ -173,7 +155,7 @@ jobs:
             node_modules
             packages/*/node_modules
             apps/*/node_modules
-          key: ${{ needs.setup.outputs.cache-key }}
+          key: ${{ needs.shared-packages.outputs.cache-key }}
           fail-on-cache-miss: true
 
       - name: Restore built packages
@@ -182,51 +164,65 @@ jobs:
           path: |
             packages/shared-types/dist
             packages/shared-utils/dist
-          key: built-${{ github.sha }}
+          key: built-packages-${{ github.sha }}
           fail-on-cache-miss: true
 
-      - name: Type check (parallel)
+      # Run all service typechecks in parallel using background processes
+      # then wait for all of them — faster than sequential on a multi-core runner
+      - name: Type check all services
         run: |
-          declare -A pids
-          for svc in apps/auth-service apps/vehicle-service \
-                     apps/inspection-service apps/fix-jobs apps/api-gateway; do
-            [ -f "$svc/tsconfig.json" ] || continue
-            { ./node_modules/.bin/tsc --project "$svc/tsconfig.json" \
-                --noEmit 2>&1 | sed "s|^|[$svc] |"; } &
-            pids[$svc]=$!
+          set -e
+          pids=()
+
+          services=(
+            "apps/auth-service"
+            "apps/vehicle-service"
+            "apps/inspection-service"
+            "apps/fix-jobs"
+            "apps/api-gateway"
+          )
+
+          for svc in "${services[@]}"; do
+            if [ -f "$svc/tsconfig.json" ]; then
+              echo "→ Checking $svc"
+              npx tsc --project "$svc/tsconfig.json" --noEmit 2>&1 | sed "s/^/[$svc] /" &
+              pids+=($!)
+            fi
           done
+
+          # Wait for all and collect exit codes
           failed=0
-          for svc in "${!pids[@]}"; do
-            wait "${pids[$svc]}" || { echo "::error::typecheck failed: $svc"; failed=$((failed+1)); }
+          for pid in "${pids[@]}"; do
+            wait "$pid" || failed=$((failed + 1))
           done
-          [ $failed -eq 0 ] && echo "✅ All services passed" || exit 1
+
+          if [ $failed -gt 0 ]; then
+            echo "::error::$failed service(s) failed type check"
+            exit 1
+          fi
+          echo "✅ All services passed type check"
 
   # ============================================================
   # JOB 3 — TEST
-  #
-  # BUG FIX: apps/fix-jobs has no test files. `vitest run` exits
-  # with code 1 when zero files match — this fails the job even
-  # though there's nothing wrong with the code.
-  #
-  # Fix: has_tests matrix field. Services with has_tests=false
-  # run `vitest run --passWithNoTests` so CI stays green until
-  # test files are added. Remove the flag once tests exist.
+  # Runs vitest for every service that has tests.
+  # Parallelised with a matrix — each service gets its own job
+  # so failures are isolated and reported individually.
   # ============================================================
   test:
     name: Test / ${{ matrix.service }}
     runs-on: self-hosted
-    needs: setup
+    needs: shared-packages
     timeout-minutes: 8
 
     strategy:
-      fail-fast: false
+      fail-fast: false   # Show ALL failing services, not just the first
       matrix:
-        include:
-          - { service: packages/shared-utils,       has_tests: true  }
-          - { service: apps/auth-service,           has_tests: true  }
-          - { service: apps/vehicle-service,        has_tests: true  }
-          - { service: apps/inspection-service,     has_tests: true  }
-          - { service: apps/fix-jobs,               has_tests: false }
+        service:
+          - packages/shared-utils
+          - apps/auth-service
+          - apps/vehicle-service
+          - apps/inspection-service
+          - apps/fix-jobs
 
     steps:
       - uses: actions/checkout@v4
@@ -238,7 +234,7 @@ jobs:
             node_modules
             packages/*/node_modules
             apps/*/node_modules
-          key: ${{ needs.setup.outputs.cache-key }}
+          key: ${{ needs.shared-packages.outputs.cache-key }}
           fail-on-cache-miss: true
 
       - name: Restore built packages
@@ -247,57 +243,33 @@ jobs:
           path: |
             packages/shared-types/dist
             packages/shared-utils/dist
-          key: built-${{ github.sha }}
+          key: built-packages-${{ github.sha }}
           fail-on-cache-miss: true
 
-      - name: Run tests
-        run: |
-          if [ "${{ matrix.has_tests }}" = "true" ]; then
-            npm run test --workspace=${{ matrix.service }}
-          else
-            echo "No tests yet for ${{ matrix.service }} — skipping (passWithNoTests)"
-            ./node_modules/.bin/vitest run \
-              --passWithNoTests \
-              --root ${{ matrix.service }}
-          fi
+      - name: Run tests — ${{ matrix.service }}
+        run: npm run test --workspace=${{ matrix.service }}
 
       - name: Upload coverage
-        if: always() && matrix.has_tests == 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-${{ matrix.service == 'packages/shared-utils' && 'shared-utils' || matrix.service == 'apps/auth-service' && 'auth' || matrix.service == 'apps/vehicle-service' && 'vehicle' || 'inspection' }}
+          name: coverage-${{ matrix.service == 'packages/shared-utils' && 'shared-utils' || matrix.service == 'apps/auth-service' && 'auth' || matrix.service == 'apps/vehicle-service' && 'vehicle' || matrix.service == 'apps/inspection-service' && 'inspection' || 'fix-jobs' }}
           path: ${{ matrix.service }}/coverage
           retention-days: 7
           if-no-files-found: ignore
 
   # ============================================================
   # JOB 4 — DOCKER BUILD CHECK
-  #
-  # BUG FIX: previous version used `docker build` (legacy docker
-  # driver) with `--cache-to type=local`. The legacy driver does
-  # NOT support cache export — only the docker-container driver
-  # does. This caused:
-  #   "Cache export is not supported for the docker driver"
-  #
-  # Fix: switch to `docker buildx build` with a named builder
-  # that uses the docker-container driver. This supports full
-  # local cache import/export.
-  #
-  # ONE-TIME RUNNER SETUP (run once on the machine, not in CI):
-  #   docker buildx create \
-  #     --name motacare-builder \
-  #     --driver docker-container \
-  #     --bootstrap \
-  #     --use
-  #
-  # The job auto-creates the builder if it doesn't exist.
+  # Builds every service Dockerfile (production target, no push).
+  # Uses local BuildKit cache on the self-hosted runner disk —
+  # repeated builds only rebuild changed layers.
   # ============================================================
   docker-build:
     name: Docker / ${{ matrix.service }}
     runs-on: self-hosted
-    needs: setup
+    needs: shared-packages
     timeout-minutes: 15
-
+ 
     strategy:
       fail-fast: false
       matrix:
@@ -307,10 +279,10 @@ jobs:
           - { service: inspection-service, dockerfile: infra/docker/inspection-service.Dockerfile }
           - { service: fix-jobs,           dockerfile: infra/docker/fix-jobs.Dockerfile           }
           - { service: api-gateway,        dockerfile: infra/docker/api-gateway.Dockerfile        }
-
+ 
     steps:
       - uses: actions/checkout@v4
-
+ 
       # Create builder with docker-container driver if it doesn't exist.
       # This is the driver that supports --cache-to type=local.
       # `|| true` is intentional — create fails if builder already exists.
@@ -324,7 +296,7 @@ jobs:
           docker buildx use motacare-builder
           echo "Builder ready:"
           docker buildx inspect | grep -E "Name:|Driver:|Status:"
-
+ 
       # --load imports the built image into the local docker daemon.
       # Required when using docker-container driver (images don't
       # automatically appear in `docker images` without --load).
@@ -341,13 +313,15 @@ jobs:
             --load \
             --progress plain \
             .
-
+ 
       - name: Remove image
         if: always()
         run: docker rmi motacare/${{ matrix.service }}:pr-${{ github.event.pull_request.number }} || true
-
+ 
   # ============================================================
   # JOB 5 — PR SUMMARY
+  # Posts a status table as a PR comment.
+  # Updates the comment on each new push (no duplicate comments).
   # ============================================================
   pr-summary:
     name: PR Summary
@@ -355,63 +329,99 @@ jobs:
     needs: [lint, typecheck, test, docker-build]
     if: always()
     timeout-minutes: 3
+
     permissions:
       pull-requests: write
 
     steps:
-      - name: Post PR comment
+      - name: Post PR summary comment
         uses: actions/github-script@v7
         with:
           script: |
-            const r = {
-              lint:   '${{ needs.lint.result }}',
-              types:  '${{ needs.typecheck.result }}',
-              tests:  '${{ needs.test.result }}',
-              docker: '${{ needs.docker-build.result }}',
+            const results = {
+              lint:        '${{ needs.lint.result }}',
+              typecheck:   '${{ needs.typecheck.result }}',
+              test:        '${{ needs.test.result }}',
+              dockerBuild: '${{ needs.docker-build.result }}',
             };
-            const icon = (v) =>
-              v==='success'?'✅':v==='skipped'?'⏭️':v==='cancelled'?'🚫':'❌';
 
-            const allGood = Object.values(r).every(v => v==='success');
+            const icon = (r) =>
+              r === 'success'  ? '✅' :
+              r === 'skipped'  ? '⏭️' :
+              r === 'cancelled'? '🚫' : '❌';
+
+            const allPassed = Object.values(results).every((r) => r === 'success');
+            const anyCancelled = Object.values(results).some((r) => r === 'cancelled');
+
+            const headline = allPassed
+              ? '## ✅ All checks passed — ready for review'
+              : anyCancelled
+                ? '## 🚫 Checks cancelled'
+                : '## ❌ Some checks failed';
+
+            const sha    = '${{ github.event.pull_request.head.sha }}'.slice(0, 7);
+            const actor  = '${{ github.actor }}';
+            const branch = '${{ github.head_ref }}';
+
             const body = [
-              allGood ? '## ✅ All checks passed' : '## ❌ Some checks failed', '',
-              '| Check | Result |', '|---|---|',
-              `| Lint         | ${icon(r.lint)}   ${r.lint}   |`,
-              `| Type Check   | ${icon(r.types)}  ${r.types}  |`,
-              `| Tests        | ${icon(r.tests)}  ${r.tests}  |`,
-              `| Docker Build | ${icon(r.docker)} ${r.docker} |`, '',
-              `**Branch:** \`${{ github.head_ref }}\` · **Commit:** \`${{ github.event.pull_request.head.sha }}`.slice(0,7) + '`',
-              '', allGood ? '_Ready for review._' : '_Fix failing checks before requesting review._',
-              '', `<sub>${new Date().toISOString()}</sub>`,
+              headline,
+              '',
+              `| Check | Result |`,
+              `|---|---|`,
+              `| Lint | ${icon(results.lint)} ${results.lint} |`,
+              `| Type Check | ${icon(results.typecheck)} ${results.typecheck} |`,
+              `| Tests | ${icon(results.test)} ${results.test} |`,
+              `| Docker Build | ${icon(results.dockerBuild)} ${results.dockerBuild} |`,
+              '',
+              `**Branch:** \`${branch}\` · **Commit:** \`${sha}\` · **By:** @${actor}`,
+              '',
+              allPassed
+                ? '_This PR is ready for review._'
+                : '_Fix the failing checks above before requesting review._',
+              '',
+              `<sub>Updated: ${new Date().toISOString()}</sub>`,
             ].join('\n');
 
-            const MARKER = '<!-- mc-pr -->';
+            // Find an existing bot comment to update instead of creating duplicates
             const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner, repo: context.repo.repo,
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
               issue_number: context.issue.number,
             });
-            const found = comments.find(c => c.user?.type==='Bot' && c.body?.includes(MARKER));
+
+            const MARKER = '<!-- motacare-pr-check -->';
+            const existing = comments.find(
+              (c) => c.user?.type === 'Bot' && c.body?.includes(MARKER),
+            );
+
             const fullBody = `${MARKER}\n${body}`;
-            if (found) {
+
+            if (existing) {
               await github.rest.issues.updateComment({
-                owner: context.repo.owner, repo: context.repo.repo,
-                comment_id: found.id, body: fullBody,
+                owner:      context.repo.owner,
+                repo:       context.repo.repo,
+                comment_id: existing.id,
+                body:       fullBody,
               });
             } else {
               await github.rest.issues.createComment({
-                owner: context.repo.owner, repo: context.repo.repo,
-                issue_number: context.issue.number, body: fullBody,
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: context.issue.number,
+                body:         fullBody,
               });
             }
 
-      - name: Write step summary
+      # Also write a step summary so it's visible in the Actions UI
+      # without needing to open the PR
+      - name: Write job summary
         if: always()
         run: |
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          | Check | Result |
-          |---|---|
-          | Lint | ${{ needs.lint.result }} |
-          | Type Check | ${{ needs.typecheck.result }} |
-          | Tests | ${{ needs.test.result }} |
-          | Docker Build | ${{ needs.docker-build.result }} |
-          EOF
+          echo "## PR Check Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Type Check | ${{ needs.typecheck.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build | ${{ needs.docker-build.result }} |" >> $GITHUB_STEP_SUMMARY
