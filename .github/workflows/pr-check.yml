@@ -44,13 +44,12 @@ env:
   INSPECTION_SERVICE_URL: http://localhost:3003
   FIX_JOBS_SERVICE_URL: http://localhost:3004
   NODE_ENV: test
-
+jobs:
 # ============================================================
 # JOB 0 — BUILD SHARED PACKAGES
 # Everything else depends on shared-types and shared-utils
 # being compiled first. One install, one build, shared via cache.
 # ============================================================
-jobs:
   shared-packages:
     name: Build shared packages
     runs-on: self-hosted
