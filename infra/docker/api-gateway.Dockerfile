@@ -53,6 +53,8 @@ COPY --from=builder /app/apps/api-gateway/dist ./dist
 COPY --from=builder /app/apps/api-gateway/package.json ./
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
+COPY --from=base /app/package.json ./
+COPY --from=base /app/turbo.json ./
 
 RUN npm install --omit=dev
 

@@ -64,7 +64,7 @@ export async function vehicleRoutes(fastify: FastifyInstance) {
   // ----------------------------------------------------------
 
   fastify.get('/internal/lookup/:hash', {
-    schema: { tags: ['Internal'], summary: 'Internal: look up vehicle by hash', hide: true },
+    schema: { tags: ['Internal'], summary: 'Internal: look up vehicle by hash', hide: true } as any,
   },
     (req, rep) => vehicleController.internalLookup(req as any, rep),
   );

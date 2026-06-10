@@ -125,7 +125,7 @@ export class InspectionService {
     let aiSummaryHint: string | undefined;
     let fallbackUsed = true;
 
-    if (env.ANTHROPIC_API_KEY) {
+    if (process.env.ANTHROPIC_API_KEY) {
       try {
         const ai = await getAiClient();
         if (ai) {
@@ -146,8 +146,8 @@ export class InspectionService {
           aiSummaryHint = dynamicChecklist.aiSummaryHint;
           fallbackUsed = dynamicChecklist.fallbackUsed;
 
-          checklistItems = dynamicChecklist.categories.flatMap((cat) =>
-            cat.items.map((item) => ({
+          checklistItems = dynamicChecklist.categories.flatMap((cat: { id: string; items: { id: string; name: string; aiReason?: string }[] }) =>
+            cat.items.map((item: { id: string; name: string; aiReason?: string }) => ({
               inspectionId: 'PLACEHOLDER',
               category: cat.id,
               checkId: item.id,
@@ -373,12 +373,12 @@ export class InspectionService {
 
     // AI summary — best effort, never blocks completion
     let aiSummary: string | null = inspection.aiSummary ?? null;
-    if (env.ANTHROPIC_API_KEY && input.outcome !== 'DRAFT' && input.summary) {
+    if (process.env.ANTHROPIC_API_KEY && input.outcome !== 'DRAFT' && input.summary) {
       try {
         const ai = await getAiClient();
         if (ai) {
           const vehicleRes = await fetch(
-            `${env.VEHICLE_SERVICE_URL}/vehicles/internal/lookup/${inspection.vehicleHash}`,
+            `${process.env.VEHICLE_SERVICE_URL}/vehicles/internal/lookup/${inspection.vehicleHash}`,
           );
           if (vehicleRes.ok) {
             const vehicleData = ((await vehicleRes.json()) as any).data;
