@@ -20,6 +20,7 @@ RUN npm install --workspace=apps/api-gateway --workspace=packages/shared-types -
 FROM base AS development
 WORKDIR /app
 
+COPY tsconfig.base.json ./
 COPY packages/shared-types ./packages/shared-types
 COPY packages/shared-utils ./packages/shared-utils
 COPY apps/api-gateway ./apps/api-gateway

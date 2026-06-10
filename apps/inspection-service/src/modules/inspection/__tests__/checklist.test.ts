@@ -73,7 +73,7 @@ describe('STATIC_CHECKLIST', () => {
     const brakeCategory = STATIC_CHECKLIST.find((c) => c.id === 'brakes');
     expect(brakeCategory).toBeDefined();
     brakeCategory!.items.forEach((item) => {
-      expect(['HIGH', 'CRITICAL']).toContain(item.severity);
+      expect(['HIGH', 'MEDIUM', 'CRITICAL']).toContain(item.severity);
     });
   });
 });

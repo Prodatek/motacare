@@ -23,6 +23,7 @@ WORKDIR /app
 COPY packages/shared-types ./packages/shared-types
 COPY packages/shared-utils ./packages/shared-utils
 COPY apps/inspection-service ./apps/inspection-service
+COPY tsconfig.base.json ./
 
 EXPOSE 3001
 

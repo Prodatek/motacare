@@ -10,6 +10,7 @@ WORKDIR /app
 
 # Install root dependencies (for workspace/turbo)
 COPY package.json turbo.json ./
+COPY tsconfig.base.json ./
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/shared-utils/package.json ./packages/shared-utils/
 COPY apps/fix-jobs/package.json ./apps/fix-jobs/
