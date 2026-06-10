@@ -40,8 +40,10 @@ ENV NODE_ENV=production
 COPY --from=base /app/apps/fix-jobs ./apps/fix-jobs
 COPY --from=base /app/packages/shared-types ./packages/shared-types
 COPY --from=base /app/packages/shared-utils ./packages/shared-utils
+COPY --from=base /app/package.json ./
+COPY --from=base /app/turbo.json ./
 
-RUN npm install --workspace=apps/fix-jobs --workspace=packages/shared-types --workspace=packages/shared-utils --omit=dev
+RUN npm install --workspace=apps/fix-jobs --workspace=packages/shared-types --workspace=packages/shared-utils --omit=dev --verbose
 
 # Run as non-root user for security
 RUN addgroup --system --gid 1001 nodejs

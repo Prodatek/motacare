@@ -24,37 +24,37 @@ export async function vehicleRoutes(fastify: FastifyInstance) {
   // ----------------------------------------------------------
 
   // Register a new vehicle (owners only)
-  fastify.post('/', { ...ownerOrAdmin, schema: { tags: ['Vehicles'], summary: 'Register a new vehicle', security: [{ bearerAuth: [] }] } },
+  fastify.post('/', { ...ownerOrAdmin, schema: { tags: ['Vehicles'], summary: 'Register a new vehicle', security: [{ bearerAuth: [] }] } as any },
     (req, rep) => vehicleController.register(req, rep),
   );
 
   // List vehicles (owners see own; fixers/admins search all)
-  fastify.get('/', { ...authenticate, schema: { tags: ['Vehicles'], summary: 'List or search vehicles', security: [{ bearerAuth: [] }] } },
+  fastify.get('/', { ...authenticate, schema: { tags: ['Vehicles'], summary: 'List or search vehicles', security: [{ bearerAuth: [] }] } as any },
     (req, rep) => vehicleController.list(req, rep),
   );
 
   // Get a single vehicle by hash (owners see own, fixers/admins see any)
-  fastify.get('/:hash', { ...authenticate, schema: { tags: ['Vehicles'], summary: 'Get vehicle by hash', security: [{ bearerAuth: [] }] } },
+  fastify.get('/:hash', { ...authenticate, schema: { tags: ['Vehicles'], summary: 'Get vehicle by hash', security: [{ bearerAuth: [] }] } as any },
     (req, rep) => vehicleController.getOne(req as any, rep),
   );
 
   // Update mutable vehicle fields (owner only)
-  fastify.patch('/:hash', { ...ownerOrAdmin, schema: { tags: ['Vehicles'], summary: 'Update vehicle details', security: [{ bearerAuth: [] }] } },
+  fastify.patch('/:hash', { ...ownerOrAdmin, schema: { tags: ['Vehicles'], summary: 'Update vehicle details', security: [{ bearerAuth: [] }] } as any },
     (req, rep) => vehicleController.update(req as any, rep),
   );
 
   // Deactivate vehicle (owner only)
-  fastify.delete('/:hash', { ...ownerOrAdmin, schema: { tags: ['Vehicles'], summary: 'Deactivate a vehicle', security: [{ bearerAuth: [] }] } },
+  fastify.delete('/:hash', { ...ownerOrAdmin, schema: { tags: ['Vehicles'], summary: 'Deactivate a vehicle', security: [{ bearerAuth: [] }] } as any },
     (req, rep) => vehicleController.deactivate(req as any, rep),
   );
 
   // Transfer ownership to another registered user
-  fastify.post('/:hash/transfer', { ...ownerOrAdmin, schema: { tags: ['Vehicles'], summary: 'Transfer vehicle ownership', security: [{ bearerAuth: [] }] } },
+  fastify.post('/:hash/transfer', { ...ownerOrAdmin, schema: { tags: ['Vehicles'], summary: 'Transfer vehicle ownership', security: [{ bearerAuth: [] }] } as any },
     (req, rep) => vehicleController.transfer(req as any, rep),
   );
 
   // Get ownership history (owner + admin)
-  fastify.get('/:hash/history', { ...authenticate, schema: { tags: ['Vehicles'], summary: 'Get vehicle ownership history', security: [{ bearerAuth: [] }] } },
+  fastify.get('/:hash/history', { ...authenticate, schema: { tags: ['Vehicles'], summary: 'Get vehicle ownership history', security: [{ bearerAuth: [] }] } as any },
     (req, rep) => vehicleController.getHistory(req as any, rep),
   );
 

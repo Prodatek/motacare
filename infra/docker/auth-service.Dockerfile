@@ -24,6 +24,7 @@ WORKDIR /app
 COPY packages/shared-types ./packages/shared-types
 COPY packages/shared-utils ./packages/shared-utils
 COPY apps/auth-service ./apps/auth-service
+COPY tsconfig.base.json ./
 
 EXPOSE 3001
 
@@ -33,7 +34,6 @@ CMD ["npm", "run", "dev", "--workspace=apps/auth-service"]
 FROM base AS builder
 WORKDIR /app
 
-COPY tsconfig.base.json ./
 COPY packages/shared-types ./packages/shared-types
 COPY packages/shared-utils ./packages/shared-utils
 COPY apps/auth-service ./apps/auth-service

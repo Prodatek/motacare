@@ -13,6 +13,7 @@ COPY package.json turbo.json ./
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/shared-utils/package.json ./packages/shared-utils/
 COPY apps/inspection-service/package.json ./apps/inspection-service/
+COPY tsconfig.base.json ./
 
 RUN npm install --workspace=apps/inspection-service --workspace=packages/shared-types --workspace=packages/shared-utils
 
@@ -23,7 +24,6 @@ WORKDIR /app
 COPY packages/shared-types ./packages/shared-types
 COPY packages/shared-utils ./packages/shared-utils
 COPY apps/inspection-service ./apps/inspection-service
-COPY tsconfig.base.json ./
 
 EXPOSE 3001
 
