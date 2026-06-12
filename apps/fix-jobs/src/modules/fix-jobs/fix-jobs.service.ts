@@ -2,7 +2,7 @@ import { eq, and, desc, count } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   fixJobs, fixJobStatusHistory,
-  type FixJob, type FixJobStatus, type PartEntry,
+  type FixJob, type FixJobStatus, type PartEntry, type FixJobStatusHistory,
 } from '../../db/schema';
 import { parsePagination, buildPaginationMeta } from '@motacare/shared-utils';
 import type {
@@ -98,7 +98,7 @@ export class FixJobService {
     jobId: string,
     requesterId: string,
     requesterRole: string,
-  ): Promise<FixJob & { statusHistory: fixJobStatusHistory[] } & { fixer?: any; vehicle?: any }> {
+  ): Promise<FixJob & { statusHistory: FixJobStatusHistory[] } & { fixer?: any; vehicle?: any }> {
 
     const job = await db.query.fixJobs.findFirst({
       where: eq(fixJobs.id, jobId),
@@ -133,7 +133,7 @@ export class FixJobService {
       console.warn('[fix-jobs] enrichment lookup failed:', err);
     }
 
-    return { ...(job as any), fixer: fixerInfo, vehicle: vehicleInfo } as FixJob & { statusHistory: fixJobStatusHistory[] } & { fixer?: any; vehicle?: any };
+    return { ...(job as any), fixer: fixerInfo, vehicle: vehicleInfo } as FixJob & { statusHistory: FixJobStatusHistory[] } & { fixer?: any; vehicle?: any };
   }
 
   // ----------------------------------------------------------
@@ -364,7 +364,7 @@ export class FixJobService {
     jobId: string,
     requesterId: string,
     requesterRole: string,
-  ): Promise<fixJobStatusHistory[]> {
+  ): Promise<FixJobStatusHistory[]> {
 
     const job = await db.query.fixJobs.findFirst({ where: eq(fixJobs.id, jobId) });
     if (!job) throw new NotFoundError('Fix job not found');
@@ -379,4 +379,4 @@ export class FixJobService {
 }
 
 // Re-export for controller
-export type { fixJobStatusHistory };
+export type { FixJobStatusHistory };
