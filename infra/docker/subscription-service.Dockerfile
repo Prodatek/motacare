@@ -13,9 +13,9 @@ COPY package.json turbo.json ./
 COPY tsconfig.base.json ./
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/shared-utils/package.json ./packages/shared-utils/
-COPY apps/subscriptions-service/package.json ./apps/subscriptions-service/
+COPY apps/subscription-service/package.json ./apps/subscription-service/
 
-RUN npm install --workspace=apps/subscriptions-service --workspace=packages/shared-types --workspace=packages/shared-utils
+RUN npm install --workspace=apps/subscription-service --workspace=packages/shared-types --workspace=packages/shared-utils
 
 # --- Development Stage ---
 FROM base AS development
@@ -23,11 +23,11 @@ WORKDIR /app
 
 COPY packages/shared-types ./packages/shared-types
 COPY packages/shared-utils ./packages/shared-utils
-COPY apps/subscriptions-service ./apps/subscriptions-service
+COPY apps/subscription-service ./apps/subscription-service
 
 EXPOSE 3004
 
-CMD ["npm", "run", "dev", "--workspace=apps/subscriptions-service"]
+CMD ["npm", "run", "dev", "--workspace=apps/subscription-service"]
 
 # --- Production Stage ---
 FROM node:20-alpine AS production
@@ -37,13 +37,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Copy only what production needs
-COPY --from=base /app/apps/subscriptions-service ./apps/subscriptions-service
+COPY --from=base /app/apps/subscription-service ./apps/subscription-service
 COPY --from=base /app/packages/shared-types ./packages/shared-types
 COPY --from=base /app/packages/shared-utils ./packages/shared-utils
 COPY --from=base /app/package.json ./
 COPY --from=base /app/turbo.json ./
 
-RUN npm install --workspace=apps/subscriptions-service --workspace=packages/shared-types --workspace=packages/shared-utils --omit=dev --verbose
+RUN npm install --workspace=apps/subscription-service --workspace=packages/shared-types --workspace=packages/shared-utils --omit=dev --verbose
 
 # Run as non-root user for security
 RUN addgroup --system --gid 1001 nodejs
@@ -52,4 +52,4 @@ USER motacare
 
 EXPOSE 3004
 
-CMD ["npm", "run", "dev", "--workspace=apps/subscriptions-service"]
+CMD ["npm", "run", "dev", "--workspace=apps/subscription-service"]
