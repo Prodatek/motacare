@@ -10,6 +10,7 @@ WORKDIR /app
 
 # Install root dependencies (for workspace/turbo)
 COPY package.json turbo.json ./
+COPY tsconfig.base.json ./
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/shared-utils/package.json ./packages/shared-utils/
 COPY apps/fix-jobs/package.json ./apps/fix-jobs/
@@ -39,8 +40,10 @@ ENV NODE_ENV=production
 COPY --from=base /app/apps/fix-jobs ./apps/fix-jobs
 COPY --from=base /app/packages/shared-types ./packages/shared-types
 COPY --from=base /app/packages/shared-utils ./packages/shared-utils
+COPY --from=base /app/package.json ./
+COPY --from=base /app/turbo.json ./
 
-RUN npm install --workspace=apps/fix-jobs --workspace=packages/shared-types --workspace=packages/shared-utils --omit=dev
+RUN npm install --workspace=apps/fix-jobs --workspace=packages/shared-types --workspace=packages/shared-utils --omit=dev --verbose
 
 # Run as non-root user for security
 RUN addgroup --system --gid 1001 nodejs

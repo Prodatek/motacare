@@ -17,6 +17,8 @@ const envSchema = z.object({
   AUTH_SERVICE_URL: z.string().url().default('http://localhost:3001'),
   VEHICLE_SERVICE_URL: z.string().url().default('http://localhost:3002'),
   INSPECTION_SERVICE_URL: z.string().url().default('http://localhost:3003'),
+  FIX_JOBS_SERVICE_URL: z.string().url().default('http://localhost:3004'),
+  PROXY_TIMEOUT_MS: z.coerce.number().default(30000),
 });
 
 const parsed = envSchema.safeParse(process.env);

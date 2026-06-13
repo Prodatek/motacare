@@ -20,7 +20,10 @@ export async function fixJobRoutes(fastify: FastifyInstance) {
   const fixerAdmin  = { onRequest: [fastify.requireRole('FIXER', 'ADMIN')] };
   const allRoles    = { onRequest: [fastify.authenticate] }; // owner + fixer + admin
 
-  const tag = { schema: { tags: ['Fix Jobs'], security: [{ bearerAuth: [] }] } };
+  // typed as `any` because Fastify's RouteShorthandOptions.schema expects
+  // a `FastifySchema` shape; these OpenAPI-only fields (tags/security)
+  // are accepted at runtime but not part of the FastifySchema type.
+  const tag: any = { schema: { tags: ['Fix Jobs'], security: [{ bearerAuth: [] }] } };
 
   // Core CRUD
   fastify.post('/',    { ...fixerAdmin, ...tag }, (req, rep) => controller.create(req, rep));

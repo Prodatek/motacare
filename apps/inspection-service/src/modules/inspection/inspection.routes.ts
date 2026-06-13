@@ -23,7 +23,7 @@ export async function inspectionRoutes(fastify: FastifyInstance) {
   // ----------------------------------------------------------
 
   fastify.get('/checklist', { ...auth,
-    schema: { tags: ['Inspections'], summary: 'Get the full static inspection checklist', security: [{ bearerAuth: [] }] },
+    schema: { tags: ['Inspections'], summary: 'Get the full static inspection checklist', security: [{ bearerAuth: [] }] } as any,
   }, (req, rep) => controller.getChecklist(req, rep));
 
   // ----------------------------------------------------------
@@ -31,15 +31,15 @@ export async function inspectionRoutes(fastify: FastifyInstance) {
   // ----------------------------------------------------------
 
   fastify.post('/', { ...fixerOrAdmin,
-    schema: { tags: ['Inspections'], summary: 'Start a new inspection session for a vehicle', security: [{ bearerAuth: [] }] },
+    schema: { tags: ['Inspections'], summary: 'Start a new inspection session for a vehicle', security: [{ bearerAuth: [] }] } as any,
   }, (req, rep) => controller.create(req, rep));
 
   fastify.get('/', { ...auth,
-    schema: { tags: ['Inspections'], summary: 'List inspections (own only for OWNER/FIXER; all for ADMIN)', security: [{ bearerAuth: [] }] },
+    schema: { tags: ['Inspections'], summary: 'List inspections (own only for OWNER/FIXER; all for ADMIN)', security: [{ bearerAuth: [] }] } as any,
   }, (req, rep) => controller.list(req, rep));
 
   fastify.get('/:id', { ...auth,
-    schema: { tags: ['Inspections'], summary: 'Get a single inspection with all checklist items and stats', security: [{ bearerAuth: [] }] },
+    schema: { tags: ['Inspections'], summary: 'Get a single inspection with all checklist items and stats', security: [{ bearerAuth: [] }] } as any,
   }, (req, rep) => controller.getOne(req as any, rep));
 
   // ----------------------------------------------------------
@@ -47,11 +47,11 @@ export async function inspectionRoutes(fastify: FastifyInstance) {
   // ----------------------------------------------------------
 
   fastify.patch('/:id/items', { ...fixerOrAdmin,
-    schema: { tags: ['Inspections'], summary: 'Update a single checklist item result', security: [{ bearerAuth: [] }] },
+    schema: { tags: ['Inspections'], summary: 'Update a single checklist item result', security: [{ bearerAuth: [] }] } as any,
   }, (req, rep) => controller.updateItem(req as any, rep));
 
   fastify.patch('/:id/items/batch', { ...fixerOrAdmin,
-    schema: { tags: ['Inspections'], summary: 'Batch update multiple checklist items at once', security: [{ bearerAuth: [] }] },
+    schema: { tags: ['Inspections'], summary: 'Batch update multiple checklist items at once', security: [{ bearerAuth: [] }] } as any,
   }, (req, rep) => controller.batchUpdateItems(req as any, rep));
 
   // ----------------------------------------------------------
@@ -59,7 +59,7 @@ export async function inspectionRoutes(fastify: FastifyInstance) {
   // ----------------------------------------------------------
 
   fastify.post('/:id/complete', { ...fixerOrAdmin,
-    schema: { tags: ['Inspections'], summary: 'Mark an inspection as complete and generate summary', security: [{ bearerAuth: [] }] },
+    schema: { tags: ['Inspections'], summary: 'Mark an inspection as complete and generate summary', security: [{ bearerAuth: [] }] } as any,
   }, (req, rep) => controller.complete(req as any, rep));
 
   // ----------------------------------------------------------
@@ -67,7 +67,7 @@ export async function inspectionRoutes(fastify: FastifyInstance) {
   // ----------------------------------------------------------
 
   fastify.post('/:id/fix-jobs', { ...fixerOrAdmin,
-    schema: { tags: ['Fix Jobs'], summary: 'Create a fix job from a completed inspection', security: [{ bearerAuth: [] }] },
+    schema: { tags: ['Fix Jobs'], summary: 'Create a fix job from a completed inspection', security: [{ bearerAuth: [] }] } as any,
   }, (req, rep) => controller.createFixJob(req as any, rep));
 }
 
@@ -83,14 +83,14 @@ export async function fixJobRoutes(fastify: FastifyInstance) {
   const fixerOrAdmin = { onRequest: [fastify.requireRole('FIXER', 'ADMIN')] };
 
   fastify.get('/', { ...auth,
-    schema: { tags: ['Fix Jobs'], summary: 'List fix jobs for the authenticated user', security: [{ bearerAuth: [] }] },
+    schema: { tags: ['Fix Jobs'], summary: 'List fix jobs for the authenticated user', security: [{ bearerAuth: [] }] } as any,
   }, (req, rep) => controller.listFixJobs(req, rep));
 
   fastify.get('/:id', { ...auth,
-    schema: { tags: ['Fix Jobs'], summary: 'Get a single fix job', security: [{ bearerAuth: [] }] },
+    schema: { tags: ['Fix Jobs'], summary: 'Get a single fix job', security: [{ bearerAuth: [] }] } as any,
   }, (req, rep) => controller.getFixJob(req as any, rep));
 
   fastify.patch('/:id', { ...fixerOrAdmin,
-    schema: { tags: ['Fix Jobs'], summary: 'Update fix job status, cost, or repair notes', security: [{ bearerAuth: [] }] },
+    schema: { tags: ['Fix Jobs'], summary: 'Update fix job status, cost, or repair notes', security: [{ bearerAuth: [] }] } as any,
   }, (req, rep) => controller.updateFixJob(req as any, rep));
 }

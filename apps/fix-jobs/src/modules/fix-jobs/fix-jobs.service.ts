@@ -2,7 +2,7 @@ import { eq, and, desc, count } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   fixJobs, fixJobStatusHistory,
-  type FixJob, type FixJobStatus, type PartEntry,
+  type FixJob, type FixJobStatus, type PartEntry, type FixJobStatusHistory,
 } from '../../db/schema';
 import { parsePagination, buildPaginationMeta } from '@motacare/shared-utils';
 import type {

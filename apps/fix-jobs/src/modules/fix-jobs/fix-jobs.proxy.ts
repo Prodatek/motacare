@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { env } from '../config/env';
+import { env } from '../../config/env';
 import { proxyRequest } from './auth.proxy';
 
 // ============================================================
@@ -8,7 +8,7 @@ import { proxyRequest } from './auth.proxy';
 
 export async function registerFixJobsProxy(fastify: FastifyInstance) {
   const up = env.FIX_JOBS_SERVICE_URL;
-  const tag = { schema: { tags: ['Fix Jobs'], security: [{ bearerAuth: [] }] } };
+  const tag: any = { schema: { tags: ['Fix Jobs'], security: [{ bearerAuth: [] }] } };
 
   // Core CRUD
   fastify.post('/fix-jobs',    { onRequest: [fastify.requireRole('FIXER', 'ADMIN')], ...tag },

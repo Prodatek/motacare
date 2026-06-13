@@ -10,6 +10,7 @@ WORKDIR /app
 
 # Install root dependencies (for workspace/turbo)
 COPY package.json turbo.json ./
+COPY tsconfig.base.json ./
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/shared-utils/package.json ./packages/shared-utils/
 COPY apps/vehicle-service/package.json ./apps/vehicle-service/
@@ -52,6 +53,8 @@ COPY --from=builder /app/apps/vehicle-service/dist ./dist
 COPY --from=builder /app/apps/vehicle-service/package.json ./
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
+COPY --from=base /app/package.json ./
+COPY --from=base /app/turbo.json ./
 
 RUN npm install --omit=dev
 
