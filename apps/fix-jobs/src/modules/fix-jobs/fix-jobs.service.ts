@@ -2,16 +2,13 @@ import { eq, and, desc, count } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   fixJobs, fixJobStatusHistory,
-  type FixJob, type FixJobStatus, type PartEntry, type FixJobStatusHistory,
+  type FixJob, type FixJobStatus, type PartEntry,
 } from '../../db/schema';
 import { parsePagination, buildPaginationMeta } from '@motacare/shared-utils';
 import type {
-  CreateFixJobInput,
-  UpdateFixJobInput,
-  AddPartInput,
-  RemovePartInput,
-  CancelFixJobInput,
-  FixJobQueryInput,
+  CreateFixJobInput, UpdateFixJobInput,
+  AddPartInput, RemovePartInput,
+  CancelFixJobInput, FixJobQueryInput,
 } from './fix-jobs.schema';
 import type { PaginatedResponse } from '@motacare/shared-types';
 
@@ -33,8 +30,7 @@ export class BadRequestError extends Error {
 }
 
 // ============================================================
-// STATUS TRANSITION MAP
-// Enforces the fix job lifecycle — illegal jumps are rejected.
+// VALID STATUS TRANSITIONS
 // ============================================================
 
 const VALID_TRANSITIONS: Record<FixJobStatus, FixJobStatus[]> = {
@@ -46,8 +42,44 @@ const VALID_TRANSITIONS: Record<FixJobStatus, FixJobStatus[]> = {
   CANCELLED:      [],
 };
 
-// Terminal states — no further changes allowed
 const TERMINAL_STATES: FixJobStatus[] = ['DELIVERED', 'CANCELLED'];
+
+// ============================================================
+// ALERT SERVICE INTEGRATION
+// Fire-and-forget — alert failures never block fix job operations.
+// ============================================================
+
+const ALERT_SERVICE_URL = process.env.ALERT_SERVICE_URL ?? 'http://localhost:3005';
+
+async function scheduleAlerts(job: FixJob): Promise<void> {
+  if (!job.estimatedCompletionAt) return;
+
+  try {
+    await fetch(`${ALERT_SERVICE_URL}/alerts/schedule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fixJobId:              job.id,
+        estimatedCompletionAt: job.estimatedCompletionAt.toISOString(),
+        vehicleHash:           job.vehicleHash,
+        fixerId:               job.fixerId,
+        ownerId:               job.ownerId,
+        description:           job.description,
+      }),
+    });
+  } catch (err) {
+    // Log but never throw — alert failure must not fail the API call
+    console.warn(`[fix-jobs] Failed to schedule alerts for job ${job.id}:`, err);
+  }
+}
+
+async function cancelAlerts(fixJobId: string): Promise<void> {
+  try {
+    await fetch(`${ALERT_SERVICE_URL}/alerts/${fixJobId}`, { method: 'DELETE' });
+  } catch (err) {
+    console.warn(`[fix-jobs] Failed to cancel alerts for job ${fixJobId}:`, err);
+  }
+}
 
 // ============================================================
 // FIX JOB SERVICE
@@ -64,41 +96,44 @@ export class FixJobService {
       const [newJob] = await tx
         .insert(fixJobs)
         .values({
-          inspectionId: input.inspectionId,
-          vehicleHash: input.vehicleHash,
+          inspectionId:          input.inspectionId,
+          vehicleHash:           input.vehicleHash,
           fixerId,
-          ownerId: input.ownerId,
-          description: input.description,
+          ownerId:               input.ownerId,
+          description:           input.description,
           estimatedCompletionAt: input.estimatedCompletionAt,
-          estimatedCost: input.estimatedCost?.toString(),
-          currency: input.currency,
-          partsUsed: [],
+          estimatedCost:         input.estimatedCost?.toString(),
+          currency:              input.currency,
+          partsUsed:             [],
         })
         .returning();
 
       await tx.insert(fixJobStatusHistory).values({
-        fixJobId: newJob.id,
+        fixJobId:   newJob.id,
         fromStatus: null,
-        toStatus: 'PENDING',
-        changedBy: fixerId,
-        notes: 'Fix job created',
+        toStatus:   'PENDING',
+        changedBy:  fixerId,
+        notes:      'Fix job created',
       });
 
       return [newJob];
     });
 
+    // Schedule alerts if an estimated completion time was provided
+    await scheduleAlerts(job);
+
     return job;
   }
 
   // ----------------------------------------------------------
-  // GET SINGLE — includes status history
+  // GET SINGLE
   // ----------------------------------------------------------
 
   async getFixJob(
     jobId: string,
     requesterId: string,
     requesterRole: string,
-  ): Promise<FixJob & { statusHistory: FixJobStatusHistory[] } & { fixer?: any; vehicle?: any }> {
+  ): Promise<FixJob & { statusHistory: any[] }> {
 
     const job = await db.query.fixJobs.findFirst({
       where: eq(fixJobs.id, jobId),
@@ -106,38 +141,14 @@ export class FixJobService {
     });
 
     if (!job) throw new NotFoundError('Fix job not found');
-
     if (requesterRole === 'OWNER' && job.ownerId !== requesterId) throw new ForbiddenError();
     if (requesterRole === 'FIXER' && job.fixerId !== requesterId) throw new ForbiddenError();
 
-    // Enrich with fixer name and vehicle details (best-effort, non-blocking)
-    let fixerInfo: any = null;
-    let vehicleInfo: any = null;
-    try {
-      const { env } = await import('../../config/env');
-      const [fixerRes, vehicleRes] = await Promise.all([
-        fetch(`${env.AUTH_SERVICE_URL}/auth/internal/user/${job.fixerId}`),
-        fetch(`${env.VEHICLE_SERVICE_URL}/vehicles/internal/lookup/${job.vehicleHash}`),
-      ]);
-
-      if (fixerRes.ok) {
-        const body = (await fixerRes.json()) as { data: any };
-        fixerInfo = body.data;
-      }
-      if (vehicleRes.ok) {
-        const body = (await vehicleRes.json()) as { data: any };
-        vehicleInfo = body.data;
-      }
-    } catch (err) {
-      // best-effort: don't fail the request if external lookups fail
-      console.warn('[fix-jobs] enrichment lookup failed:', err);
-    }
-
-    return { ...(job as any), fixer: fixerInfo, vehicle: vehicleInfo } as FixJob & { statusHistory: FixJobStatusHistory[] } & { fixer?: any; vehicle?: any };
+    return job as FixJob & { statusHistory: any[] };
   }
 
   // ----------------------------------------------------------
-  // LIST — paginated, role-scoped
+  // LIST
   // ----------------------------------------------------------
 
   async listFixJobs(
@@ -152,7 +163,7 @@ export class FixJobService {
       requesterRole === 'OWNER' ? [eq(fixJobs.ownerId, requesterId)] :
       requesterRole === 'FIXER' ? [eq(fixJobs.fixerId, requesterId)] : [];
 
-    if (query.status) conditions.push(eq(fixJobs.status, query.status));
+    if (query.status)      conditions.push(eq(fixJobs.status, query.status));
     if (query.vehicleHash) conditions.push(eq(fixJobs.vehicleHash, query.vehicleHash));
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -172,6 +183,8 @@ export class FixJobService {
 
   // ----------------------------------------------------------
   // UPDATE — status, notes, cost, timing
+  // Reschedules alerts if estimatedCompletionAt changes.
+  // Cancels alerts if job moves to a terminal state.
   // ----------------------------------------------------------
 
   async updateFixJob(
@@ -188,7 +201,6 @@ export class FixJobService {
       throw new ConflictError(`This fix job is ${job.status} and cannot be modified`);
     }
 
-    // Validate status transition
     if (input.status && input.status !== job.status) {
       const allowed = VALID_TRANSITIONS[job.status as FixJobStatus] ?? [];
       if (!allowed.includes(input.status as FixJobStatus)) {
@@ -208,35 +220,48 @@ export class FixJobService {
       const [updatedJob] = await tx
         .update(fixJobs)
         .set({
-          ...(input.status !== undefined && { status: input.status }),
+          ...(input.status !== undefined           && { status: input.status }),
           ...(input.estimatedCompletionAt !== undefined && { estimatedCompletionAt: input.estimatedCompletionAt }),
-          ...(input.finalCost !== undefined && { finalCost: input.finalCost?.toString() }),
-          ...(input.repairNotes !== undefined && { repairNotes: input.repairNotes }),
+          ...(input.finalCost !== undefined        && { finalCost: input.finalCost?.toString() }),
+          ...(input.repairNotes !== undefined      && { repairNotes: input.repairNotes }),
           ...completionTimestamp,
           updatedAt: new Date(),
         })
         .where(eq(fixJobs.id, jobId))
         .returning();
 
-      // Record status change in history
       if (input.status && input.status !== job.status) {
         await tx.insert(fixJobStatusHistory).values({
-          fixJobId: jobId,
+          fixJobId:   jobId,
           fromStatus: job.status as FixJobStatus,
-          toStatus: input.status as FixJobStatus,
-          changedBy: fixerId,
-          notes: input.notes ?? null,
+          toStatus:   input.status as FixJobStatus,
+          changedBy:  fixerId,
+          notes:      input.notes ?? null,
         });
       }
 
       return [updatedJob];
     });
 
+    // Alert side-effects — fire and forget
+    const movedToTerminal = TERMINAL_STATES.includes(updated.status as FixJobStatus);
+    const completionTimeChanged =
+      input.estimatedCompletionAt !== undefined &&
+      input.estimatedCompletionAt?.toString() !== job.estimatedCompletionAt?.toString();
+
+    if (movedToTerminal) {
+      // Job done or cancelled — remove any pending alerts
+      await cancelAlerts(jobId);
+    } else if (completionTimeChanged) {
+      // Due date changed — reschedule at new time
+      await scheduleAlerts(updated);
+    }
+
     return updated;
   }
 
   // ----------------------------------------------------------
-  // CANCEL — requires a reason, records in history
+  // CANCEL
   // ----------------------------------------------------------
 
   async cancelFixJob(
@@ -249,7 +274,6 @@ export class FixJobService {
     const job = await db.query.fixJobs.findFirst({ where: eq(fixJobs.id, jobId) });
     if (!job) throw new NotFoundError('Fix job not found');
 
-    // Both fixer and owner can cancel
     if (requesterRole === 'FIXER' && job.fixerId !== requesterId) throw new ForbiddenError();
     if (requesterRole === 'OWNER' && job.ownerId !== requesterId) throw new ForbiddenError();
 
@@ -265,74 +289,58 @@ export class FixJobService {
         .returning();
 
       await tx.insert(fixJobStatusHistory).values({
-        fixJobId: jobId,
+        fixJobId:   jobId,
         fromStatus: job.status as FixJobStatus,
-        toStatus: 'CANCELLED',
-        changedBy: requesterId,
-        notes: `Cancelled: ${input.reason}`,
+        toStatus:   'CANCELLED',
+        changedBy:  requesterId,
+        notes:      `Cancelled: ${input.reason}`,
       });
 
       return [updatedJob];
     });
 
+    // Cancel pending alerts — job is done
+    await cancelAlerts(jobId);
+
     return updated;
   }
 
   // ----------------------------------------------------------
-  // ADD PART — appends to the partsUsed JSON array
+  // ADD PART
   // ----------------------------------------------------------
 
-  async addPart(
-    jobId: string,
-    input: AddPartInput,
-    fixerId: string,
-  ): Promise<FixJob> {
-
+  async addPart(jobId: string, input: AddPartInput, fixerId: string): Promise<FixJob> {
     const job = await db.query.fixJobs.findFirst({ where: eq(fixJobs.id, jobId) });
     if (!job) throw new NotFoundError('Fix job not found');
-    if (job.fixerId !== fixerId) throw new ForbiddenError('Only the assigned fixer can add parts');
+    if (job.fixerId !== fixerId) throw new ForbiddenError();
     if (TERMINAL_STATES.includes(job.status as FixJobStatus)) {
       throw new ConflictError('Cannot add parts to a completed or cancelled job');
     }
 
-    const currentParts: PartEntry[] = (job.partsUsed as PartEntry[]) ?? [];
-    const newPart: PartEntry = {
-      name: input.name,
-      quantity: input.quantity,
-      unitCost: input.unitCost,
-    };
+    const current: PartEntry[] = (job.partsUsed as PartEntry[]) ?? [];
+    const updated = [...current, { name: input.name, quantity: input.quantity, unitCost: input.unitCost }];
+    const partsTotal = updated.reduce((sum, p) => sum + p.quantity * p.unitCost, 0);
 
-    const updatedParts = [...currentParts, newPart];
-
-    // Recalculate estimated cost from parts if not set manually
-    const partsTotal = updatedParts.reduce((sum, p) => sum + p.quantity * p.unitCost, 0);
-
-    const [updated] = await db
+    const [result] = await db
       .update(fixJobs)
       .set({
-        partsUsed: updatedParts,
-        // Update estimated cost to reflect parts cost if it was 0/unset
-        ...((!job.estimatedCost || Number(job.estimatedCost) === 0) && {
-          estimatedCost: partsTotal.toString(),
-        }),
+        partsUsed: updated,
+        ...(!job.estimatedCost || Number(job.estimatedCost) === 0
+          ? { estimatedCost: partsTotal.toString() }
+          : {}),
         updatedAt: new Date(),
       })
       .where(eq(fixJobs.id, jobId))
       .returning();
 
-    return updated;
+    return result;
   }
 
   // ----------------------------------------------------------
-  // REMOVE PART — removes by index from partsUsed array
+  // REMOVE PART
   // ----------------------------------------------------------
 
-  async removePart(
-    jobId: string,
-    input: RemovePartInput,
-    fixerId: string,
-  ): Promise<FixJob> {
-
+  async removePart(jobId: string, input: RemovePartInput, fixerId: string): Promise<FixJob> {
     const job = await db.query.fixJobs.findFirst({ where: eq(fixJobs.id, jobId) });
     if (!job) throw new NotFoundError('Fix job not found');
     if (job.fixerId !== fixerId) throw new ForbiddenError();
@@ -340,32 +348,25 @@ export class FixJobService {
       throw new ConflictError('Cannot remove parts from a completed or cancelled job');
     }
 
-    const currentParts: PartEntry[] = (job.partsUsed as PartEntry[]) ?? [];
-    if (input.partIndex < 0 || input.partIndex >= currentParts.length) {
+    const current: PartEntry[] = (job.partsUsed as PartEntry[]) ?? [];
+    if (input.partIndex < 0 || input.partIndex >= current.length) {
       throw new BadRequestError(`Part index ${input.partIndex} is out of range`);
     }
 
-    const updatedParts = currentParts.filter((_, i) => i !== input.partIndex);
-
-    const [updated] = await db
+    const [result] = await db
       .update(fixJobs)
-      .set({ partsUsed: updatedParts, updatedAt: new Date() })
+      .set({ partsUsed: current.filter((_, i) => i !== input.partIndex), updatedAt: new Date() })
       .where(eq(fixJobs.id, jobId))
       .returning();
 
-    return updated;
+    return result;
   }
 
   // ----------------------------------------------------------
   // GET STATUS HISTORY
   // ----------------------------------------------------------
 
-  async getStatusHistory(
-    jobId: string,
-    requesterId: string,
-    requesterRole: string,
-  ): Promise<FixJobStatusHistory[]> {
-
+  async getStatusHistory(jobId: string, requesterId: string, requesterRole: string) {
     const job = await db.query.fixJobs.findFirst({ where: eq(fixJobs.id, jobId) });
     if (!job) throw new NotFoundError('Fix job not found');
     if (requesterRole === 'OWNER' && job.ownerId !== requesterId) throw new ForbiddenError();
@@ -378,5 +379,4 @@ export class FixJobService {
   }
 }
 
-// Re-export for controller
-export type { FixJobStatusHistory };
+export type { PartEntry };
