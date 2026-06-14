@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Car, ClipboardCheck, LayoutDashboard,
-  LogOut, Wrench, Menu, X,
+  LogOut, Wrench, Menu, X, CreditCard
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { cn, getInitials } from '@/lib/utils';
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { label: 'Vehicles',    href: '/dashboard/vehicles',     icon: Car },
   { label: 'Inspections', href: '/dashboard/inspections',  icon: ClipboardCheck },
   { label: 'Fix Jobs',    href: '/dashboard/fix-jobs',     icon: Wrench },
+  { label: 'Subscription',  href: '/dashboard/subscription', icon: CreditCard },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

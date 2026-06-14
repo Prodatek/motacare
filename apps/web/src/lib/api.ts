@@ -281,3 +281,75 @@ export const fixJobApi = {
   createFixJob: (payload: Parameters<typeof inspectionApi.createFixJob>[0]) =>
     inspectionApi.createFixJob(payload),
 };
+// ============================================================
+// SUBSCRIPTION API — add this section to apps/web/src/lib/api.ts
+// ============================================================
+
+export interface PlanFeatures {
+  vehiclesAllowed: number;
+  inspectionsPerMonth: number;
+  fixersAllowed: number;
+  canExportReports: boolean;
+  canAccessObd: boolean;
+  canAccessAiSummary: boolean;
+}
+
+export interface PlanInfo {
+  name: string;
+  price: { monthly: number; yearly: number };
+  features: PlanFeatures;
+  description: string;
+}
+
+export interface PlansResponse {
+  FREE: PlanInfo;
+  PRO: PlanInfo;
+  WORKSHOP: PlanInfo;
+}
+
+export interface Subscription {
+  id: string;
+  userId: string;
+  tier: 'FREE' | 'PRO' | 'WORKSHOP';
+  status: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'EXPIRED' | 'TRIALING';
+  billingInterval: 'MONTHLY' | 'YEARLY' | null;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  trialEndsAt: string | null;
+  vehiclesAllowed: number;
+  inspectionsPerMonth: number;
+  fixersAllowed: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const subscriptionApi = {
+
+  // Public — plan comparison table, no auth needed
+  getPlans: () => request<PlansResponse>('/subscriptions/plans'),
+
+  // Current user's subscription (auto-creates FREE record if none exists)
+  getMySubscription: () => request<Subscription>('/subscriptions/me'),
+
+  // Start a Stripe Checkout session — returns a URL to redirect to
+  createCheckout: (tier: 'PRO' | 'WORKSHOP', billingInterval: 'MONTHLY' | 'YEARLY') =>
+    request<{ url: string }>('/subscriptions/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ tier, billingInterval }),
+    }),
+
+  // Open Stripe's billing portal — manage payment method, cancel, view invoices
+  createPortalSession: (returnUrl?: string) =>
+    request<{ url: string }>('/subscriptions/portal', {
+      method: 'POST',
+      body: JSON.stringify(returnUrl ? { returnUrl } : {}),
+    }),
+
+  // Cancel subscription — immediately or at period end
+  cancel: (immediately: boolean = false) =>
+    request<Subscription>('/subscriptions/cancel', {
+      method: 'POST',
+      body: JSON.stringify({ immediately }),
+    }),
+};

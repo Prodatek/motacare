@@ -16,6 +16,7 @@ const envSchema = z.object({
   // Internal service URLs
   AUTH_SERVICE_URL: z.string().url().default('http://localhost:3001'),
   VEHICLE_SERVICE_URL: z.string().url().default('http://localhost:3002'),
+   SUBSCRIPTION_SERVICE_URL: z.string().url().default('http://localhost:3007'),
 });
 
 const parsed = envSchema.safeParse(process.env);

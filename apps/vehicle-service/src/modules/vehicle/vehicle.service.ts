@@ -2,7 +2,7 @@ import { eq, and, desc, count } from 'drizzle-orm';
 import { db } from '../../db';
 import { vehicles, vehicleOwnershipHistory, type Vehicle, type NewVehicle } from '../../db/schema';
 import { env } from '../../config/env';
-import { generateVehicleHash, parsePagination, buildPaginationMeta } from '@motacare/shared-utils';
+import { generateVehicleHash, parsePagination, buildPaginationMeta, checkFeatureLimit } from '@motacare/shared-utils';
 import type {
   RegisterVehicleInput,
   UpdateVehicleInput,
@@ -42,6 +42,19 @@ export class ConflictError extends Error {
     this.name = 'ConflictError';
   }
 }
+export class PlanLimitExceededError extends Error {
+  constructor(
+    public readonly resource: string,
+    public readonly limit: number,
+    public readonly tier: string,
+  ) {
+    super(
+      `Your ${tier} plan allows up to ${limit} ${resource}. ` +
+      `Upgrade your plan to register more.`,
+    );
+    this.name = 'PlanLimitExceededError';
+  }
+}
 
 // ============================================================
 // VEHICLE SERVICE
@@ -64,6 +77,23 @@ export class VehicleService {
 
     if (existingVehicle) {
       throw new VehicleAlreadyRegisteredError(input.vin);
+    }
+    // Count the owner's current ACTIVE vehicles, then ask
+    // subscription-service whether they can add another.
+    const [{ value: currentVehicleCount }] = await db
+      .select({ value: count() })
+      .from(vehicles)
+      .where(and(eq(vehicles.ownerId, ownerId), eq(vehicles.status, 'ACTIVE')));
+ 
+    const limitCheck = await checkFeatureLimit(
+      env.SUBSCRIPTION_SERVICE_URL,
+      ownerId,
+      'vehicles',
+      Number(currentVehicleCount),
+    );
+ 
+    if (!limitCheck.allowed) {
+      throw new PlanLimitExceededError('vehicles', limitCheck.limit, limitCheck.tier);
     }
 
     // 2. Generate the vehicle hash
