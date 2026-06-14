@@ -305,6 +305,14 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-motacare_dev_password}
       POSTGRES_DB: ${SUBSCRIPTION_DB_NAME:-motacare_subscriptions}
       AUTH_SERVICE_URL: http://auth-service:3001
+      APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3005}
+      # Stripe — required, service exits on boot if missing
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_PRICE_PRO_MONTHLY: ${STRIPE_PRICE_PRO_MONTHLY}
+      STRIPE_PRICE_PRO_YEARLY: ${STRIPE_PRICE_PRO_YEARLY}
+      STRIPE_PRICE_WORKSHOP_MONTHLY: ${STRIPE_PRICE_WORKSHOP_MONTHLY}
+      STRIPE_PRICE_WORKSHOP_YEARLY: ${STRIPE_PRICE_WORKSHOP_YEARLY}
     ports:
       - '3007:3007'
     volumes:

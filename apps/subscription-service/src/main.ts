@@ -6,6 +6,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import { env } from './config/env';
 import { checkDatabaseConnection } from './db';
 import { registerAuthMiddleware } from './middleware/authenticate';
+import { checkFeatureLimit } from './middleware/feature-gate';
 import { subscriptionRoutes } from './modules/subscriptions/subscriptions.routes';
 import { registerStripeWebhook } from './webhooks/stripe.webhook';
 
@@ -20,10 +21,17 @@ export async function buildServer() {
     trustProxy: true,
   });
 
+  // ----------------------------------------------------------
+  // STRIPE WEBHOOK — must be registered BEFORE the JSON body
+  // parser below, because it needs the raw request body for
+  // signature verification.
+  // ----------------------------------------------------------
+  await registerStripeWebhook(fastify);
+
   await fastify.register(fastifyHelmet, { contentSecurityPolicy: false });
   await fastify.register(fastifyCors, {
     origin: env.NODE_ENV === 'production' ? ['https://motacare.app'] : true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   });
   await fastify.register(fastifyRateLimit, {
     max: 100, timeWindow: '1 minute',
@@ -33,8 +41,9 @@ export async function buildServer() {
   await fastify.register(fastifyJwt, { secret: env.JWT_SECRET });
   await registerAuthMiddleware(fastify);
 
-  await registerStripeWebhook(fastify);
-
+  // ----------------------------------------------------------
+  // HEALTH CHECK
+  // ----------------------------------------------------------
   fastify.get('/health', async (_req, reply) => {
     const dbHealthy = await checkDatabaseConnection();
     return reply.status(dbHealthy ? 200 : 503).send({
@@ -45,6 +54,15 @@ export async function buildServer() {
     });
   });
 
+  // ----------------------------------------------------------
+  // INTERNAL — feature gate, called by other services
+  // (no auth — internal network only)
+  // ----------------------------------------------------------
+  fastify.post('/internal/check-limit', checkFeatureLimit);
+
+  // ----------------------------------------------------------
+  // SUBSCRIPTION ROUTES
+  // ----------------------------------------------------------
   await fastify.register(subscriptionRoutes, { prefix: '/subscriptions' });
 
   return fastify;
@@ -56,11 +74,12 @@ async function start() {
     await server.listen({ port: env.PORT, host: '0.0.0.0' });
     console.log(`
 ╔══════════════════════════════════════════╗
-║      💳 Motacare Subscription Service    ║
+║    💳 Motacare Subscription Service      ║
 ╠══════════════════════════════════════════╣
-║  Port   : ${env.PORT}                         ║
-║  Env    : ${env.NODE_ENV.padEnd(14)}          ║
-║  Health : http://localhost:${env.PORT}/health ║
+║  Port    : ${env.PORT}                        ║
+║  Env     : ${env.NODE_ENV.padEnd(14)}         ║
+║  Health  : http://localhost:${env.PORT}/health║
+║  Webhook : /webhooks/stripe               ║
 ╚══════════════════════════════════════════╝
     `);
   } catch (err) {

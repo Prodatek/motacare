@@ -20,5 +20,9 @@ GRANT ALL PRIVILEGES ON DATABASE motacare_inspections TO motacare;
 CREATE DATABASE motacare_fixjobs;
 GRANT ALL PRIVILEGES ON DATABASE motacare_fixjobs TO motacare;
 
+-- Subscription Service Database
+CREATE DATABASE motacare_subscriptions;
+GRANT ALL PRIVILEGES ON DATABASE motacare_subscriptions TO motacare;
+
 -- Confirm
 \echo '✅ Motacare databases created successfully'

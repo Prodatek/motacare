@@ -13,6 +13,7 @@ import { registerVehicleProxy } from './routes/vehicle.proxy';
 import { registerInspectionProxy } from './routes/inspection.proxy';
 import { registerFixJobsProxy } from './routes/fix-jobs.proxy';
 import { buildRateLimitErrorResponse } from './middleware/rate-limit';
+import { registerSubscriptionProxy } from './routes/subscription.proxy';
 
 // ============================================================
 // SERVER FACTORY — exported for testing
@@ -131,6 +132,7 @@ export async function buildServer() {
       fetch(`${env.VEHICLE_SERVICE_URL}/health`).then((r) => ({ service: 'vehicle', ok: r.ok })),
       fetch(`${env.INSPECTION_SERVICE_URL}/health`).then((r) => ({ service: 'inspection', ok: r.ok })),
       fetch(`${env.FIX_JOBS_SERVICE_URL}/health`).then((r) => ({ service: 'fix-jobs', ok: r.ok })),
+      fetch(`${env.SUBSCRIPTION_SERVICE_URL}/health`).then((r) => ({ service: 'subscription', ok: r.ok })),
     ]);
 
     const results = checks.map((c) =>
@@ -161,6 +163,7 @@ export async function buildServer() {
   await registerVehicleProxy(fastify);
   await registerInspectionProxy(fastify);
   await registerFixJobsProxy(fastify);
+  await registerSubscriptionProxy(fastify);
 
   // ----------------------------------------------------------
   // 404 HANDLER — catches any unmatched route
