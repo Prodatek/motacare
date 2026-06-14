@@ -11,10 +11,7 @@ COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/shared-utils/package.json ./packages/shared-utils/
 COPY apps/alert-service/package.json ./apps/alert-service/
 
-RUN npm install \
-  --workspace=apps/alert-service \
-  --workspace=packages/shared-types \
-  --workspace=packages/shared-utils
+RUN npm install --workspace=apps/alert-service --workspace=packages/shared-types --workspace=packages/shared-utils
 
 FROM base AS development
 WORKDIR /app
