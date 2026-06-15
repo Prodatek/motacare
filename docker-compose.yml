@@ -205,6 +205,7 @@ services:
       VEHICLE_SERVICE_URL: http://vehicle-service:3002
       INSPECTION_SERVICE_URL: http://inspection-service:3003
       FIX_JOBS_SERVICE_URL: http://fix-jobs:3004
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:3007
     ports:
       - '3000:3000'
     volumes:
@@ -218,6 +219,7 @@ services:
       - vehicle-service
       - inspection-service
       - fix-jobs
+      - subscription-service
   
   fix-jobs:
     build:
