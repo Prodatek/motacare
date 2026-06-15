@@ -35,17 +35,38 @@ export default function RegisterVehiclePage() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      const vehicle = await vehicleApi.register(data);
-      toast.success('Vehicle registered successfully!');
+      const vehicle = await vehicleApi.register(payload);
+      toast.success('Vehicle registered!');
       router.push(`/dashboard/vehicles/${vehicle.hash}`);
+ 
     } catch (error) {
+      if (error instanceof ApiClientError && error.error === 'Plan Limit Exceeded') {
+        const details = error.details as { limit?: number; tier?: string } | undefined;
+    
+        toast.error(
+          `You've reached your ${details?.tier ?? 'current'} plan limit ` +
+          `of ${details?.limit ?? '?'} vehicle${details?.limit === 1 ? '' : 's'}. ` +
+          `Redirecting you to upgrade…`,
+          { duration: 3000 },
+        );
+    
+        // Give the user a moment to read the toast, then redirect.
+        setTimeout(() => {
+          router.push('/dashboard/subscription');
+        }, 2000);
+    
+        return;
+      }
+    
       if (error instanceof ApiClientError) {
         toast.error(error.message);
       } else {
-        toast.error('Failed to register vehicle. Please try again.');
+        toast.error('Failed to register vehicle');
       }
+    } finally {
+      setIsSubmitting(false);
     }
-  };
+      };
 
   const Field = ({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) => (
     <div>
