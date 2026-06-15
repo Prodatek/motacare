@@ -134,6 +134,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-motacare_dev_password}
       POSTGRES_DB: ${VEHICLE_DB_NAME:-motacare_vehicles}
       AUTH_SERVICE_URL: http://auth-service:3001
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:3007
     ports:
       - '3002:3002'
     volumes:
@@ -147,6 +148,8 @@ services:
       postgres:
         condition: service_healthy
       auth-service:
+        condition: service_started
+      subscription-service:
         condition: service_started
 
   inspection-service:
@@ -167,6 +170,7 @@ services:
       POSTGRES_DB: ${INSPECTION_DB_NAME:-motacare_inspections}
       AUTH_SERVICE_URL: http://auth-service:3001
       VEHICLE_SERVICE_URL: http://vehicle-service:3002
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:3007
     ports:
       - '3003:3003'
     volumes:
@@ -182,6 +186,8 @@ services:
       auth-service:
         condition: service_started
       vehicle-service:
+        condition: service_started
+      subscription-service:
         condition: service_started
 
   api-gateway:
@@ -257,7 +263,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: development
-      PORT: 3005
+      PORT: 3006
       # Redis — shared with the rest of the stack
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -271,9 +277,9 @@ services:
       SMTP_PASS: ${SMTP_PASS}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@motacare.app}
       EMAIL_FROM_NAME: Motacare
-      APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3005}
+      APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3006}
     ports:
-      - '3006:3005'   # expose on 3006 to avoid clash with web on 3005
+      - '3006:3006'   # expose on 3006 to avoid clash with web on 3005
     volumes:
       - ./apps/alert-service:/app/apps/alert-service
       - ./packages:/app/packages

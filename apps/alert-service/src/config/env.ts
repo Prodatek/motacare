@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'staging', 'production', 'test']).default('development'),
-  PORT: z.coerce.number().default(3005),
+  PORT: z.coerce.number().default(3006),
 
   // Redis — BullMQ uses this for the queue store
   REDIS_HOST: z.string().default('localhost'),
@@ -22,7 +22,7 @@ const envSchema = z.object({
   EMAIL_FROM_NAME: z.string().default('Motacare'),
 
   // App URL — used in email links
-  APP_URL: z.string().url().default('http://localhost:3005'),
+  APP_URL: z.string().url().default('http://localhost:3006'),
 
   // Alert timing offsets in milliseconds
   ALERT_THRESHOLD_24H_MS: z.coerce.number().default(24 * 60 * 60 * 1000),

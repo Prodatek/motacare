@@ -1,16 +1,3 @@
-// ============================================================
-// FEATURE GATE CLIENT
-// Add this file to packages/shared-utils/src/feature-gate.ts
-// and re-export it from packages/shared-utils/src/index.ts:
-//
-//   export * from './feature-gate';
-//
-// Used by vehicle-service and inspection-service to check
-// plan limits before creating a resource. Fails OPEN —
-// if subscription-service is unreachable, the action is
-// allowed rather than blocking the whole app on a dependency.
-// ============================================================
-
 export interface FeatureLimitCheck {
   allowed: boolean;
   limit: number;
@@ -18,51 +5,53 @@ export interface FeatureLimitCheck {
   tier: 'FREE' | 'PRO' | 'WORKSHOP';
   unlimited: boolean;
 }
-
-export interface FeatureLimitExceededInfo {
-  limit: number;
-  tier: string;
-  resource: 'vehicles' | 'inspections' | 'fixers';
-}
-
-/**
- * Calls subscription-service to check whether the user is within
- * their plan's limit for a given resource.
- *
- * @param subscriptionServiceUrl Base URL of subscription-service
- * @param userId The user (owner or fixer) being checked
- * @param resource Which limit to check
- * @param currentCount The caller's current count of this resource
- *
- * @returns The limit check result. On any network/service error,
- *          returns `{ allowed: true, ... }` — fail open so a
- *          subscription-service outage never blocks core features.
- */
+ 
 export async function checkFeatureLimit(
   subscriptionServiceUrl: string,
   userId: string,
   resource: 'vehicles' | 'inspections' | 'fixers',
   currentCount: number,
 ): Promise<FeatureLimitCheck> {
+ 
+  const url = `${subscriptionServiceUrl}/internal/check-limit`;
+ 
   try {
-    const res = await fetch(`${subscriptionServiceUrl}/internal/check-limit`, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, resource, currentCount }),
-      // Don't let a slow subscription-service stall the request
       signal: AbortSignal.timeout(2000),
     });
-
+ 
     if (!res.ok) {
-      console.warn(`[feature-gate] check-limit returned ${res.status} — failing open`);
+      const body = await res.text().catch(() => '');
+      console.error(
+        `[feature-gate] ❌ check-limit returned ${res.status} from ${url} — FAILING OPEN. Body: ${body}`,
+      );
       return { allowed: true, limit: -1, currentCount, tier: 'FREE', unlimited: true };
     }
-
+ 
     const body = (await res.json()) as { data: FeatureLimitCheck };
+ 
+    // Dev-time visibility — confirms the gate actually ran and what it decided
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(
+        `[feature-gate] ${resource} check for user ${userId}: ` +
+        `count=${currentCount} limit=${body.data.limit} tier=${body.data.tier} ` +
+        `→ ${body.data.allowed ? 'ALLOWED' : 'BLOCKED'}`,
+      );
+    }
+ 
     return body.data;
-  } catch (err) {
-    // Network error, timeout, service down — fail open
-    console.warn('[feature-gate] check-limit unreachable — failing open:', err);
+  } catch (err: any) {
+    // This branch fires if SUBSCRIPTION_SERVICE_URL is wrong, the service
+    // is down, or the request times out. Logged as ERROR (not warn)
+    // because it means limits are NOT being enforced at all.
+    console.error(
+      `[feature-gate] ❌ Could not reach ${url} — FAILING OPEN (no limits enforced). ` +
+      `Check SUBSCRIPTION_SERVICE_URL env var and that subscription-service is running. ` +
+      `Error: ${err.message}`,
+    );
     return { allowed: true, limit: -1, currentCount, tier: 'FREE', unlimited: true };
-  }
+    }
 }
