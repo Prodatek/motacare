@@ -1,6 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import {
-  SubscriptionService, NotFoundError, ConflictError, BadRequestError,
+  SubscriptionService, NotFoundError, ConflictError, BadRequestError, BillingNotConfiguredError,
 } from './subscriptions.service';
 import {
   createCheckoutSchema, createPortalSessionSchema, cancelSubscriptionSchema,
@@ -136,6 +136,8 @@ export class SubscriptionController {
       return reply.status(409).send({ statusCode: 409, error: 'Conflict', message: error.message });
     if (error instanceof BadRequestError)
       return reply.status(400).send({ statusCode: 400, error: 'Bad Request', message: error.message });
+    if (error instanceof BillingNotConfiguredError)
+      return reply.status(503).send({ statusCode: 503, error: 'Billing Not Configured', message: error.message,});
     console.error('Unhandled error:', error);
     return reply.status(500).send({ statusCode: 500, error: 'Internal Server Error', message: 'An unexpected error occurred' });
   }

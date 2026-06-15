@@ -6,16 +6,23 @@ import {
   PLAN_LIMITS,
   type Subscription, type SubscriptionTier,
 } from '../../db/schema';
-import { env } from '../../config/env';
+import { env, isStripeConfigured } from '../../config/env';
 import type { CreateCheckoutInput, CancelSubscriptionInput } from './subscriptions.schema';
-
 // ============================================================
-// STRIPE CLIENT — single instance
+// STRIPE CLIENT — single instance-Now created  lazily  
 // ============================================================
 
-const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-  apiVersion: '2024-04-10',
-});
+let _stripe: Stripe | null = null;
+ 
+function getStripe(): Stripe {
+  if (!isStripeConfigured) {
+    throw new BillingNotConfiguredError();
+  }
+  if (!_stripe) {
+    _stripe = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: '2024-04-10' });
+  }
+  return _stripe;
+}
 
 // ============================================================
 // PRICE ID MAP
@@ -48,7 +55,15 @@ export class ConflictError extends Error {
 export class BadRequestError extends Error {
   constructor(msg: string) { super(msg); this.name = 'BadRequestError'; }
 }
-
+export class BillingNotConfiguredError extends Error {
+  constructor() {
+    super(
+      'Billing is not configured on this server yet. ' +
+      'Set STRIPE_SECRET_KEY and the price IDs to enable subscriptions.',
+    );
+    this.name = 'BillingNotConfiguredError';
+  }
+}
 // ============================================================
 // SUBSCRIPTION SERVICE
 // ============================================================
@@ -96,7 +111,9 @@ export class SubscriptionService {
     userEmail: string,
     input: CreateCheckoutInput,
   ): Promise<{ url: string }> {
-
+ 
+    if (!isStripeConfigured) throw new BillingNotConfiguredError();
+ 
     const sub = await this.getSubscription(userId);
 
     // Prevent upgrading from an already-active paid plan directly
@@ -112,7 +129,7 @@ export class SubscriptionService {
     // Get or create Stripe customer
     let customerId = sub.stripeCustomerId ?? undefined;
     if (!customerId) {
-      const customer = await stripe.customers.create({
+      const customer = await getStripe().customers.create({
         email: userEmail,
         metadata: { userId },
       });
@@ -125,7 +142,7 @@ export class SubscriptionService {
         .where(eq(subscriptions.userId, userId));
     }
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
@@ -153,7 +170,9 @@ export class SubscriptionService {
     userId: string,
     returnUrl?: string,
   ): Promise<{ url: string }> {
-
+ 
+    if (!isStripeConfigured) throw new BillingNotConfiguredError();
+ 
     const sub = await this.getSubscription(userId);
 
     if (!sub.stripeCustomerId) {
@@ -162,7 +181,7 @@ export class SubscriptionService {
       );
     }
 
-    const session = await stripe.billingPortal.sessions.create({
+    const session = await getStripe().billingPortal.sessions.create({
       customer: sub.stripeCustomerId,
       return_url: returnUrl ?? `${env.APP_URL}/dashboard/subscription`,
     });
@@ -178,7 +197,9 @@ export class SubscriptionService {
     userId: string,
     input: CancelSubscriptionInput,
   ): Promise<Subscription> {
-
+ 
+    if (!isStripeConfigured) throw new BillingNotConfiguredError();
+ 
     const sub = await this.getSubscription(userId);
 
     if (sub.tier === 'FREE' || !sub.stripeSubscriptionId) {
@@ -189,10 +210,10 @@ export class SubscriptionService {
     }
 
     if (input.immediately) {
-      await stripe.subscriptions.cancel(sub.stripeSubscriptionId);
+      await getStripe().subscriptions.cancel(sub.stripeSubscriptionId);
     } else {
       // Cancel at period end — user keeps access until paid period expires
-      await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+      await getStripe().subscriptions.update(sub.stripeSubscriptionId, {
         cancel_at_period_end: true,
       });
     }
