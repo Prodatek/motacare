@@ -12,8 +12,8 @@ import { vehicleApi, inspectionApi, ApiClientError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import type { Vehicle } from '@motacare/shared-types';
 import { formatDate, cn } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
-const router = useRouter();
+
+
 
 // ── Start Inspection Modal ──────────────────────────────────
 
@@ -26,6 +26,7 @@ function StartInspectionModal({
   onClose: () => void;
   onCreated: (inspectionId: string) => void;
 }) {
+  const router = useRouter();
   const [mileage, setMileage] = useState('');
   const [symptoms, setSymptoms] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);

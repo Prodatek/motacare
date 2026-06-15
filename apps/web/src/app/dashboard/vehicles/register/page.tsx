@@ -30,12 +30,12 @@ export default function RegisterVehiclePage() {
   const router = useRouter();
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { fuelType: 'PETROL', transmissionType: 'MANUAL', mileageAtRegistration: 0 },
+    defaultValues: { fuelType: 'PETROL', transmissionType: 'MANUAL', mileageAtRegistration: 0, trim: '', engineCode: '' },
   });
 
   const onSubmit = async (data: FormData) => {
     try {
-      const vehicle = await vehicleApi.register(payload);
+      const vehicle = await vehicleApi.register(data);
       toast.success('Vehicle registered!');
       router.push(`/dashboard/vehicles/${vehicle.hash}`);
  
@@ -63,10 +63,8 @@ export default function RegisterVehiclePage() {
       } else {
         toast.error('Failed to register vehicle');
       }
-    } finally {
-      setIsSubmitting(false);
     }
-      };
+  };
 
   const Field = ({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) => (
     <div>
