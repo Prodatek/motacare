@@ -246,15 +246,23 @@ export const inspectionApi = {
 
 export const fixJobApi = {
 
-  list: (params?: { page?: number; limit?: number; status?: string; vehicleHash?: string }) => {
+  list: (params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    statuses?: string[];   // NEW — e.g. ['PENDING', 'IN_PROGRESS', 'AWAITING_PARTS']
+    vehicleHash?: string;
+  }) => {
+    const { statuses, ...rest } = params ?? {};
     const query = new URLSearchParams(
-      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any,
-    ).toString();
-    return request<PaginatedResponse<FixJob>>(`/fix-jobs${query ? `?${query}` : ''}`);
+      Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) as any,
+    );
+    if (statuses?.length) {
+      query.set('statuses', statuses.join(','));
+    }
+    const qs = query.toString();
+    return request<PaginatedResponse<FixJob>>(`/fix-jobs${qs ? `?${qs}` : ''}`);
   },
-
-  get: (id: string) =>
-    request<FixJobWithHistory>(`/fix-jobs/${id}`),
 
   update: (id: string, payload: {
     status?: string;

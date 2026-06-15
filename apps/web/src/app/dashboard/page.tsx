@@ -8,37 +8,54 @@ import { vehicleApi, inspectionApi, fixJobApi } from '@/lib/api';
 import type { Vehicle, Inspection, FixJob } from '@motacare/shared-types';
 import { formatDate, statusColour } from '@/lib/utils';
 
+const ACTIVE_FIX_JOB_STATUSES = ['PENDING', 'IN_PROGRESS', 'AWAITING_PARTS'];
+
 export default function DashboardPage() {
   const { user } = useAuth();
+
+  // Recent items shown in the lists below (capped at 5 — intentional)
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [inspections, setInspections] = useState<Inspection[]>([]);
   const [fixJobs, setFixJobs] = useState<FixJob[]>([]);
+
+  // Accurate totals for the stat cards (NOT capped by list limit)
+  const [vehicleTotal, setVehicleTotal] = useState(0);
+  const [inspectionTotal, setInspectionTotal] = useState(0);
+  const [activeFixJobTotal, setActiveFixJobTotal] = useState(0);
+
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function loadData() {
       try {
-        const [v, i, f] = await Promise.allSettled([
+        const [v, i, f, activeF] = await Promise.allSettled([
           vehicleApi.list({ limit: 5 }),
           inspectionApi.list({ limit: 5 }),
           fixJobApi.list({ limit: 5 }),
+          // Separate call: pagination.total here gives the ACCURATE
+          // count of active fix jobs across ALL pages, regardless
+          // of the limit:5 used for the "recent" list above.
+          fixJobApi.list({ limit: 1, statuses: ACTIVE_FIX_JOB_STATUSES }),
         ]);
 
-        if (v.status === 'fulfilled') setVehicles(v.value?.data ?? []);
-        if (i.status === 'fulfilled') setInspections(i.value?.data ?? []);
-        if (f.status === 'fulfilled') setFixJobs(f.value?.data ?? []);
+        if (v.status === 'fulfilled') {
+          setVehicles(v.value?.data ?? []);
+          setVehicleTotal(v.value?.pagination?.total ?? 0);
+        }
+        if (i.status === 'fulfilled') {
+          setInspectionTotal(i.value?.pagination?.total ?? 0);
+        }
+        if (f.status === 'fulfilled') {
+          setFixJobs(f.value?.data ?? []);
+        }
+        if (activeF.status === 'fulfilled') {
+          setActiveFixJobTotal(activeF.value?.pagination?.total ?? 0);
+        }
       } finally {
         setIsLoading(false);
       }
     }
     loadData();
   }, []);
-
-  const activeJobs = Array.isArray(fixJobs)
-    ? fixJobs.filter(
-        (j) => j.status === 'IN_PROGRESS' || j.status === 'PENDING' || j.status === 'AWAITING_PARTS',
-      )
-    : [];
 
   return (
     <div className="max-w-5xl">
@@ -50,12 +67,13 @@ export default function DashboardPage() {
         <p className="text-gray-500 mt-1">Here&apos;s what&apos;s happening across your account.</p>
       </div>
 
-      {/* Stats */}
+      {/* Stats — these now reflect TRUE totals via pagination.total,
+          not just the length of a 5-item "recent" list */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         {[
-          { label: 'Registered vehicles', value: vehicles.length, icon: Car, href: '/dashboard/vehicles', color: 'text-brand-600 bg-brand-50' },
-          { label: 'Inspections', value: inspections.length, icon: ClipboardCheck, href: '/dashboard/inspections', color: 'text-green-600 bg-green-50' },
-          { label: 'Active fix jobs', value: activeJobs.length, icon: Wrench, href: '/dashboard/fix-jobs', color: 'text-orange-600 bg-orange-50' },
+          { label: 'Registered vehicles', value: vehicleTotal,     icon: Car,            href: '/dashboard/vehicles',   color: 'text-brand-600 bg-brand-50' },
+          { label: 'Inspections',         value: inspectionTotal,  icon: ClipboardCheck, href: '/dashboard/inspections', color: 'text-green-600 bg-green-50' },
+          { label: 'Active fix jobs',     value: activeFixJobTotal, icon: Wrench,        href: '/dashboard/fix-jobs',   color: 'text-orange-600 bg-orange-50' },
         ].map(({ label, value, icon: Icon, href, color }) => (
           <Link key={label} href={href} className="card p-5 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-3">
@@ -113,6 +131,11 @@ export default function DashboardPage() {
                 </Link>
               ))}
             </div>
+          )}
+          {vehicleTotal > vehicles.length && (
+            <p className="text-xs text-gray-400 mt-3 text-center">
+              Showing {vehicles.length} of {vehicleTotal}
+            </p>
           )}
         </div>
 

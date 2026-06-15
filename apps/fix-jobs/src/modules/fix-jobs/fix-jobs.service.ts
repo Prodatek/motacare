@@ -1,4 +1,4 @@
-import { eq, and, desc, count } from 'drizzle-orm';
+import { eq, and, desc, count, inArray } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   fixJobs, fixJobStatusHistory,
@@ -163,7 +163,11 @@ export class FixJobService {
       requesterRole === 'OWNER' ? [eq(fixJobs.ownerId, requesterId)] :
       requesterRole === 'FIXER' ? [eq(fixJobs.fixerId, requesterId)] : [];
 
-    if (query.status)      conditions.push(eq(fixJobs.status, query.status));
+    if (query.status) {
+      conditions.push(eq(fixJobs.status, query.status));
+    } else if (query.statuses && query.statuses.length > 0) {
+      conditions.push(inArray(fixJobs.status, query.statuses));
+    }
     if (query.vehicleHash) conditions.push(eq(fixJobs.vehicleHash, query.vehicleHash));
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
