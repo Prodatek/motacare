@@ -16,10 +16,15 @@ export async function checkFeatureLimit(
   const url = `${subscriptionServiceUrl}/internal/check-limit`;
  
   try {
+    const payload = { userId, resource, currentCount };
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[feature-gate] POST ${url} payload: ${JSON.stringify(payload)}`);
+    }
+
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, resource, currentCount }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(2000),
     });
  

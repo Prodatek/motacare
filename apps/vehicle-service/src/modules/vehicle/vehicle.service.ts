@@ -80,16 +80,21 @@ export class VehicleService {
     }
     // Count the owner's current ACTIVE vehicles, then ask
     // subscription-service whether they can add another.
-    const [{ value: currentVehicleCount }] = await db
+    const [countRow] = await db
       .select({ value: count() })
       .from(vehicles)
       .where(and(eq(vehicles.ownerId, ownerId), eq(vehicles.status, 'ACTIVE')));
- 
+
+    // Different DB drivers may return the count column under different keys
+    // (e.g. { value: '0' } or { count: '0' }). Normalize to a number.
+    const rawCount = countRow ? (countRow.value ?? (countRow.count as unknown) ?? 0) : 0;
+    const numericCurrentVehicleCount = Number(rawCount) || 0;
+
     const limitCheck = await checkFeatureLimit(
       env.SUBSCRIPTION_SERVICE_URL,
       ownerId,
       'vehicles',
-      Number(currentVehicleCount),
+      numericCurrentVehicleCount,
     );
  
     if (!limitCheck.allowed) {
