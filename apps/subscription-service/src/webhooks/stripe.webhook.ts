@@ -20,12 +20,32 @@ const service = new SubscriptionService();
 
 export async function registerStripeWebhook(fastify: FastifyInstance) {
 
-  // Tell Fastify to give us the raw Buffer for this route
+  // Tell Fastify to give us the raw Buffer for the Stripe webhook route
+  // but continue to parse JSON normally for all other routes. The
+  // previous implementation replaced Fastify's JSON parser globally,
+  // causing other endpoints (e.g. /internal/check-limit) to receive a
+  // Buffer instead of a parsed object and fail validation.
   fastify.addContentTypeParser(
     'application/json',
     { parseAs: 'buffer' },
-    function (_req, body, done) {
-      done(null, body);
+    function (req, body, done) {
+      // `req.raw.url` contains the original request path
+      const url = (req.raw && (req.raw as any).url) || (req as any).url || '';
+
+      // If this is the Stripe webhook route, return the raw Buffer so
+      // Stripe signature verification can use the exact bytes.
+      if (url && url.startsWith('/webhooks/stripe')) {
+        return done(null, body);
+      }
+
+      // For all other routes, attempt to parse the buffer as JSON so
+      // normal endpoints continue to receive JS objects.
+      try {
+        const parsed = JSON.parse((body as Buffer).toString('utf8'));
+        return done(null, parsed);
+      } catch (err) {
+        return done(err as Error);
+      }
     },
   );
 
