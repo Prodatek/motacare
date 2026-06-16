@@ -264,6 +264,9 @@ export const fixJobApi = {
     return request<PaginatedResponse<FixJob>>(`/fix-jobs${qs ? `?${qs}` : ''}`);
   },
 
+  get: (id: string) =>
+    request<FixJobWithHistory | FixJob>(`/fix-jobs/${id}`),
+
   update: (id: string, payload: {
     status?: string;
     estimatedCompletionAt?: string | null;
