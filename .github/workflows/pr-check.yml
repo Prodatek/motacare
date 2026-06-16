@@ -36,6 +36,7 @@ env:
   VEHICLE_SERVICE_URL: http://localhost:3002
   INSPECTION_SERVICE_URL: http://localhost:3003
   FIX_JOBS_SERVICE_URL: http://localhost:3004
+  SUBSCRIPTION_SERVICE_URL: http://localhost:3007
 
 jobs:
   # ============================================================
@@ -227,6 +228,8 @@ jobs:
           - { service: apps/vehicle-service,        has_tests: true  }
           - { service: apps/inspection-service,     has_tests: true  }
           - { service: apps/fix-jobs,               has_tests: false }
+          - { service: apps/subscription-service,   has_tests: false }
+          - { service: apps/alert-service,          has_tests: false  }
 
     steps:
       - uses: actions/checkout@v4
@@ -307,6 +310,8 @@ jobs:
           - { service: inspection-service, dockerfile: infra/docker/inspection-service.Dockerfile }
           - { service: fix-jobs,           dockerfile: infra/docker/fix-jobs.Dockerfile           }
           - { service: api-gateway,        dockerfile: infra/docker/api-gateway.Dockerfile        }
+          - { service: subscription-service, dockerfile: infra/docker/subscription-service.Dockerfile }
+          - { service: alert-service,       dockerfile: infra/docker/alert-service.Dockerfile        }
 
     steps:
       - uses: actions/checkout@v4

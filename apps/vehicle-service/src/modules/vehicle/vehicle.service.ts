@@ -87,7 +87,9 @@ export class VehicleService {
 
     // Different DB drivers may return the count column under different keys
     // (e.g. { value: '0' } or { count: '0' }). Normalize to a number.
-    const rawCount = countRow ? (countRow.value ?? (countRow.count as unknown) ?? 0) : 0;
+    const rawCount = countRow
+      ? (countRow.value ?? ((countRow as unknown as { count?: number }).count) ?? 0)
+      : 0;
     const numericCurrentVehicleCount = Number(rawCount) || 0;
 
     const limitCheck = await checkFeatureLimit(
