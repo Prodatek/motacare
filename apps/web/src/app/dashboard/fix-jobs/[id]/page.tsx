@@ -55,7 +55,7 @@ export default function FixJobDetailPage() {
   const nextStatuses = job ? NEXT_STATUSES[job.status] ?? [] : [];
 
   useEffect(() => {
-    fixJobApi.get(id)
+    (fixJobApi as any).get(id)
       .then((res) => {
         // API now enriches job with `fixer` and `vehicle` fields — accept them as any
         setJob(res as any);
@@ -132,7 +132,7 @@ export default function FixJobDetailPage() {
             </div>
             <p className="text-base font-medium text-gray-900">{job.description}</p>
             <div className="text-sm text-gray-500 mt-1">
-              {job.fixer && (
+              {job.fixerId && (
                 <div>Fixer: {job.fixer.firstName} {job.fixer.lastName}</div>
               )}
               {job.vehicle && (
