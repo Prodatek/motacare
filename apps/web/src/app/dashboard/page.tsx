@@ -2,188 +2,177 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Car, ClipboardCheck, Wrench, Plus, ArrowRight, TrendingUp } from 'lucide-react';
+import { Car, ClipboardCheck, Wrench, Plus, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { vehicleApi, inspectionApi, fixJobApi } from '@/lib/api';
-import type { Vehicle, FixJob } from '@motacare/shared-types';
-import { formatDate } from '@/lib/utils';
+import type { Vehicle, Inspection, FixJob } from '@motacare/shared-types';
+import { formatDate, statusColour } from '@/lib/utils';
 
-const ACTIVE_STATUSES = ['PENDING', 'IN_PROGRESS', 'AWAITING_PARTS'];
-
-function StatCard({ label, value, icon, colour, subtext, href }: {
-  label: string; value: number | string; icon: React.ReactNode;
-  colour: string; subtext?: string; href: string;
-}) {
-  const colours: Record<string, { icon: string; glow: string; text: string }> = {
-    brand:  { icon: 'rgba(239,68,68,0.15)',  glow: 'rgba(239,68,68,0.06)',  text: '#f87171' },
-    green:  { icon: 'rgba(16,185,129,0.15)', glow: 'rgba(16,185,129,0.06)', text: '#34d399' },
-    amber:  { icon: 'rgba(245,158,11,0.15)', glow: 'rgba(245,158,11,0.06)', text: '#fbbf24' },
-  };
-  const c = colours[colour] ?? colours.brand;
-
-  return (
-    <Link href={href} style={{ textDecoration: 'none', display: 'block' }}>
-      <div className="card" style={{ padding: 20, cursor: 'pointer', background: `linear-gradient(135deg, ${c.glow}, var(--surface-1))`, position: 'relative', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: c.icon, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.text }}>
-            {icon}
-          </div>
-          <ArrowRight style={{ width: 16, height: 16, color: 'var(--text-tertiary)' }} />
-        </div>
-        <p style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-1px' }}>{value}</p>
-        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>{label}</p>
-        {subtext && <p style={{ margin: '4px 0 0', fontSize: 12, color: c.text }}>{subtext}</p>}
-      </div>
-    </Link>
-  );
-}
+const ACTIVE_FIX_JOB_STATUSES = ['PENDING', 'IN_PROGRESS', 'AWAITING_PARTS'];
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const today = new Date().toLocaleDateString('en-NG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
+  // Recent items shown in the lists below (capped at 5 — intentional)
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [fixJobs, setFixJobs] = useState<FixJob[]>([]);
+
+  // Accurate totals for the stat cards (NOT capped by list limit)
   const [vehicleTotal, setVehicleTotal] = useState(0);
   const [inspectionTotal, setInspectionTotal] = useState(0);
   const [activeFixJobTotal, setActiveFixJobTotal] = useState(0);
+
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function load() {
+    async function loadData() {
       try {
-        const [v, i, f, af] = await Promise.allSettled([
+        const [v, i, f, activeF] = await Promise.allSettled([
           vehicleApi.list({ limit: 5 }),
-          inspectionApi.list({ limit: 1 }),
+          inspectionApi.list({ limit: 5 }),
           fixJobApi.list({ limit: 5 }),
-          fixJobApi.list({ limit: 1, statuses: ACTIVE_STATUSES }),
+          // Separate call: pagination.total here gives the ACCURATE
+          // count of active fix jobs across ALL pages, regardless
+          // of the limit:5 used for the "recent" list above.
+          fixJobApi.list({ limit: 1, statuses: ACTIVE_FIX_JOB_STATUSES }),
         ]);
-        if (v.status === 'fulfilled') { setVehicles(v.value?.data ?? []); setVehicleTotal(v.value?.pagination?.total ?? 0); }
-        if (i.status === 'fulfilled') setInspectionTotal(i.value?.pagination?.total ?? 0);
-        if (f.status === 'fulfilled') setFixJobs(f.value?.data ?? []);
-        if (af.status === 'fulfilled') setActiveFixJobTotal(af.value?.pagination?.total ?? 0);
-      } finally { setIsLoading(false); }
+
+        if (v.status === 'fulfilled') {
+          setVehicles(v.value?.data ?? []);
+          setVehicleTotal(v.value?.pagination?.total ?? 0);
+        }
+        if (i.status === 'fulfilled') {
+          setInspectionTotal(i.value?.pagination?.total ?? 0);
+        }
+        if (f.status === 'fulfilled') {
+          setFixJobs(f.value?.data ?? []);
+        }
+        if (activeF.status === 'fulfilled') {
+          setActiveFixJobTotal(activeF.value?.pagination?.total ?? 0);
+        }
+      } finally {
+        setIsLoading(false);
+      }
     }
-    load();
+    loadData();
   }, []);
 
-  const statusColour: Record<string, string> = {
-    ACTIVE: 'status-active', PENDING: 'status-pending', IN_PROGRESS: 'status-progress',
-    COMPLETED: 'status-completed', NEEDS_FOLLOWUP: 'status-followup',
-    CANCELLED: 'status-cancelled', DELIVERED: 'status-delivered', DRAFT: 'status-draft',
-  };
-
   return (
-    <div style={{ maxWidth: 1000 }}>
+    <div className="max-w-5xl">
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <p style={{ margin: '0 0 4px', fontSize: 12, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>{today}</p>
-        <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-gray-900">
           Good day, {user?.firstName} 👋
         </h1>
-        <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>Here's what's happening across your account.</p>
+        <p className="text-gray-500 mt-1">Here&apos;s what&apos;s happening across your account.</p>
       </div>
 
-      {/* Stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 24 }}>
-        <StatCard label="Registered vehicles"  value={isLoading ? '–' : vehicleTotal}     icon={<Car style={{ width: 20, height: 20 }} />}           colour="brand" href="/dashboard/vehicles"   subtext={vehicleTotal > 0 ? `${vehicleTotal} total` : undefined} />
-        <StatCard label="Total inspections"    value={isLoading ? '–' : inspectionTotal}  icon={<ClipboardCheck style={{ width: 20, height: 20 }} />} colour="green" href="/dashboard/inspections" />
-        <StatCard label="Active fix jobs"      value={isLoading ? '–' : activeFixJobTotal} icon={<Wrench style={{ width: 20, height: 20 }} />}          colour="amber" href="/dashboard/fix-jobs" subtext={activeFixJobTotal > 0 ? '● Live' : undefined} />
-      </div>
-
-      {/* Content grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
-
-        {/* Recent vehicles */}
-        <div className="card" style={{ padding: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Recent vehicles</h2>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              {user?.role === 'OWNER' && (
-                <Link href="/dashboard/vehicles/register" className="btn-primary" style={{ height: 28, padding: '0 10px', fontSize: 12 }}>
-                  <Plus style={{ width: 12, height: 12 }} /> Add
-                </Link>
-              )}
-              <Link href="/dashboard/vehicles" style={{ fontSize: 12, color: 'var(--brand-400)', textDecoration: 'none' }}>View all →</Link>
+      {/* Stats — these now reflect TRUE totals via pagination.total,
+          not just the length of a 5-item "recent" list */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        {[
+          { label: 'Registered vehicles', value: vehicleTotal,     icon: Car,            href: '/dashboard/vehicles',   color: 'text-brand-600 bg-brand-50' },
+          { label: 'Inspections',         value: inspectionTotal,  icon: ClipboardCheck, href: '/dashboard/inspections', color: 'text-green-600 bg-green-50' },
+          { label: 'Active fix jobs',     value: activeFixJobTotal, icon: Wrench,        href: '/dashboard/fix-jobs',   color: 'text-orange-600 bg-orange-50' },
+        ].map(({ label, value, icon: Icon, href, color }) => (
+          <Link key={label} href={href} className="card p-5 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-3">
+              <div className={`inline-flex h-10 w-10 items-center justify-center rounded-lg ${color}`}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <ArrowRight className="h-4 w-4 text-gray-300" />
             </div>
-          </div>
+            <p className="text-3xl font-bold text-gray-900">{isLoading ? '–' : value}</p>
+            <p className="text-sm text-gray-500 mt-0.5">{label}</p>
+          </Link>
+        ))}
+      </div>
 
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Recent vehicles */}
+        <div className="card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-900">Recent vehicles</h2>
+            <Link href="/dashboard/vehicles" className="text-sm text-brand-600 hover:underline">View all</Link>
+          </div>
           {isLoading ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 52, borderRadius: 8 }} />)}
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-12 bg-gray-100 rounded-lg animate-pulse" />
+              ))}
             </div>
           ) : vehicles.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px 0' }}>
-              <Car style={{ width: 32, height: 32, color: 'var(--text-tertiary)', margin: '0 auto 8px' }} />
-              <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>No vehicles registered yet</p>
+            <div className="text-center py-8">
+              <Car className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">No vehicles yet</p>
+              {user?.role === 'OWNER' && (
+                <Link href="/dashboard/vehicles/register" className="btn-primary mt-3 text-xs px-3 py-1.5 inline-flex">
+                  <Plus className="h-3 w-3" /> Register vehicle
+                </Link>
+              )}
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {vehicles.map(v => (
-                <Link key={v.id} href={`/dashboard/vehicles/${v.hash}`}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface-1)', borderRadius: 8, textDecoration: 'none', transition: 'background 0.15s' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'var(--surface-1)')}
+            <div className="space-y-2">
+              {vehicles.map((v) => (
+                <Link
+                  key={v.id}
+                  href={`/dashboard/vehicles/${v.hash}`}
+                  className="flex items-center justify-between rounded-lg p-3 hover:bg-gray-50 transition-colors"
                 >
-                  <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(239,68,68,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Car style={{ width: 16, height: 16, color: 'var(--brand-400)' }} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
                       {v.year} {v.make} {v.model}
                     </p>
-                    <p style={{ margin: 0, fontSize: 12, color: 'var(--text-tertiary)', fontFamily: 'monospace' }}>{v.licensePlate}</p>
+                    <p className="text-xs text-gray-400">{v.licensePlate}</p>
                   </div>
-                  <span className={`badge ${v.status === 'ACTIVE' ? 'status-active' : 'status-cancelled'}`}>{v.status}</span>
+                  <span className={`badge ${v.status === 'ACTIVE' ? 'text-green-700 bg-green-50' : 'text-gray-600 bg-gray-100'}`}>
+                    {v.status}
+                  </span>
                 </Link>
               ))}
             </div>
           )}
-
           {vehicleTotal > vehicles.length && (
-            <p style={{ fontSize: 12, color: 'var(--text-tertiary)', textAlign: 'center', marginTop: 12 }}>
+            <p className="text-xs text-gray-400 mt-3 text-center">
               Showing {vehicles.length} of {vehicleTotal}
             </p>
           )}
         </div>
 
         {/* Recent fix jobs */}
-        <div className="card" style={{ padding: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Recent fix jobs</h2>
-            <Link href="/dashboard/fix-jobs" style={{ fontSize: 12, color: 'var(--brand-400)', textDecoration: 'none' }}>View all →</Link>
+        <div className="card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-900">Recent fix jobs</h2>
+            <Link href="/dashboard/fix-jobs" className="text-sm text-brand-600 hover:underline">View all</Link>
           </div>
-
           {isLoading ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 52, borderRadius: 8 }} />)}
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-12 bg-gray-100 rounded-lg animate-pulse" />
+              ))}
             </div>
           ) : fixJobs.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px 0' }}>
-              <Wrench style={{ width: 32, height: 32, color: 'var(--text-tertiary)', margin: '0 auto 8px' }} />
-              <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>No fix jobs yet</p>
+            <div className="text-center py-8">
+              <Wrench className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">No fix jobs yet</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {fixJobs.map(job => {
-                const borderColours: Record<string, string> = {
-                  IN_PROGRESS: '#f59e0b', PENDING: '#6366f1', AWAITING_PARTS: '#ef4444',
-                  COMPLETED: '#10b981', DELIVERED: '#6366f1', CANCELLED: '#6b7280',
-                };
-                return (
-                  <Link key={job.id} href={`/dashboard/fix-jobs/${job.id}`}
-                    style={{ display: 'block', padding: '10px 12px', background: 'var(--surface-1)', borderRadius: 8, textDecoration: 'none', borderLeft: `3px solid ${borderColours[job.status] ?? 'var(--surface-border2)'}`, transition: 'background 0.15s' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'var(--surface-1)')}
-                  >
-                    <p style={{ margin: '0 0 3px', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.description}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span className={`badge ${statusColour[job.status] ?? ''}`} style={{ fontSize: 11 }}>{job.status.replace('_', ' ')}</span>
-                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{formatDate(job.createdAt)}</span>
-                    </div>
-                  </Link>
-                );
-              })}
+            <div className="space-y-2">
+              {fixJobs.map((job) => (
+                <Link
+                  key={job.id}
+                  href={`/dashboard/fix-jobs/${job.id}`}
+                  className="flex items-center justify-between rounded-lg p-3 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{job.description}</p>
+                    <p className="text-xs text-gray-400">{formatDate(job.createdAt)}</p>
+                  </div>
+                  <span className={`badge ml-2 shrink-0 ${statusColour(job.status)}`}>
+                    {job.status.replace('_', ' ')}
+                  </span>
+                </Link>
+              ))}
             </div>
           )}
         </div>
