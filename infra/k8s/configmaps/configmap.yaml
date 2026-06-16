@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: motacare-config
+  namespace: motacare
+data:
+  NODE_ENV: "production"
+
+  # ── Service discovery (internal k8s DNS) ──
+  # Within the cluster, every service is reachable at
+  # <service-name>.motacare.svc.cluster.local
+  # We use short form since all services are in the same namespace.
+  AUTH_SERVICE_URL:         "http://auth-service:3001"
+  VEHICLE_SERVICE_URL:      "http://vehicle-service:3002"
+  INSPECTION_SERVICE_URL:   "http://inspection-service:3003"
+  FIX_JOBS_SERVICE_URL:     "http://fix-jobs:3004"
+  ALERT_SERVICE_URL:        "http://alert-service:3005"
+  SUBSCRIPTION_SERVICE_URL: "http://subscription-service:3007"
+
+  # ── Database connection (host only — creds come from secrets) ──
+  POSTGRES_HOST: "postgres"
+  POSTGRES_PORT: "5432"
+
+  # ── Per-service database names ──
+  AUTH_DB_NAME:         "motacare_auth"
+  VEHICLE_DB_NAME:      "motacare_vehicles"
+  INSPECTION_DB_NAME:   "motacare_inspections"
+  FIX_JOBS_DB_NAME:     "motacare_fixjobs"
+  SUBSCRIPTION_DB_NAME: "motacare_subscriptions"
+
+  # ── Redis ──
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+
+  # ── Public URLs — update these to your actual domains ──
+  APP_URL:              "https://app.motacare.ng"
+  NEXT_PUBLIC_API_URL:  "https://api.motacare.ng"
+
+  # ── Ports ──
+  AUTH_SERVICE_PORT:         "3001"
+  VEHICLE_SERVICE_PORT:      "3002"
+  INSPECTION_SERVICE_PORT:   "3003"
+  FIX_JOBS_SERVICE_PORT:     "3004"
+  ALERT_SERVICE_PORT:        "3005"
+  API_GATEWAY_PORT:          "3000"
+  WEB_PORT:                  "3005"
+  SUBSCRIPTION_SERVICE_PORT: "3007"

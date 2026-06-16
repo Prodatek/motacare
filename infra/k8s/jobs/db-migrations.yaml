@@ -1,0 +1,107 @@
+# ============================================================
+# DATABASE MIGRATIONS JOB
+# Runs once before any service deployment.
+# Each service's migration is run in its own init container
+# against the correct database.
+#
+# Usage:
+#   kubectl apply -f 08-db-migrations.yaml -n motacare
+#   kubectl wait --for=condition=complete job/motacare-migrations -n motacare --timeout=120s
+# ============================================================
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: motacare-migrations
+  namespace: motacare
+  annotations:
+    # Deletes the job 5 minutes after completion
+    "batch.kubernetes.io/job-tracking": "true"
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      initContainers:
+        # Run migrations sequentially — auth first (others may depend on it)
+        - name: migrate-auth
+          image: ghcr.io/Prodatek/motacare/auth-service:latest
+          command: ["node", "dist/db/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: motacare-config
+            - secretRef:
+                name: motacare-secrets
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: motacare-config
+                  key: AUTH_DB_NAME
+
+        - name: migrate-vehicles
+          image: ghcr.io/Prodatek/motacare/vehicle-service:latest
+          command: ["node", "dist/db/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: motacare-config
+            - secretRef:
+                name: motacare-secrets
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: motacare-config
+                  key: VEHICLE_DB_NAME
+
+        - name: migrate-inspections
+          image: ghcr.io/Prodatek/motacare/inspection-service:latest
+          command: ["node", "dist/db/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: motacare-config
+            - secretRef:
+                name: motacare-secrets
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: motacare-config
+                  key: INSPECTION_DB_NAME
+
+        - name: migrate-fix-jobs
+          image: ghcr.io/Prodatek/motacare/fix-jobs:latest
+          command: ["node", "dist/db/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: motacare-config
+            - secretRef:
+                name: motacare-secrets
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: motacare-config
+                  key: FIX_JOBS_DB_NAME
+
+        - name: migrate-subscriptions
+          image: ghcr.io/Prodatek/motacare/subscription-service:latest
+          command: ["node", "dist/db/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: motacare-config
+            - secretRef:
+                name: motacare-secrets
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: motacare-config
+                  key: SUBSCRIPTION_DB_NAME
+
+      # The main container just exits 0 once all initContainers succeed
+      containers:
+        - name: done
+          image: alpine:3.18
+          command: ["echo", "All migrations complete"]
