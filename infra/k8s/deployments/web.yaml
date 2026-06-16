@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: motacare
+  labels:
+    app: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: web
+          image: ghcr.io/Prodatek/motacare/web:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3005
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: NEXT_PUBLIC_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: motacare-config
+                  key: NEXT_PUBLIC_API_URL
+            # Next.js needs these at BUILD time for static pages,
+            # but these are the runtime values for SSR and API routes
+            - name: API_URL
+              value: "http://api-gateway:3000"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3005
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3005
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: motacare
+spec:
+  selector:
+    app: web
+  ports:
+    - port: 3005
+      targetPort: 3005

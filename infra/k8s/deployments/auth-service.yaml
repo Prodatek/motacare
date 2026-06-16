@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: motacare
+  labels:
+    app: auth-service
+    version: "1.0.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: auth-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0    # zero-downtime — always keep existing pods up during rollout
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: auth-service
+          image: ghcr.io/Prodatek/motacare/auth-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3001
+          envFrom:
+            - configMapRef:
+                name: motacare-config
+            - secretRef:
+                name: motacare-secrets
+          env:
+            - name: PORT
+              value: "3001"
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: motacare-config
+                  key: AUTH_DB_NAME
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: motacare
+spec:
+  selector:
+    app: auth-service
+  ports:
+    - port: 3001
+      targetPort: 3001

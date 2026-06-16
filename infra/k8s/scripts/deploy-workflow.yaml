@@ -1,0 +1,115 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to deploy (default: git SHA)'
+        required: false
+
+env:
+  REGISTRY: ghcr.io
+  ORG: Prodatek   # ← replace with your GitHub org/username
+
+jobs:
+  # ── Build all service images in parallel ──────────────────
+  build:
+    name: Build / ${{ matrix.service }}
+    runs-on: self-hosted
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: auth-service
+            dockerfile: infra/docker/auth-service.Dockerfile
+          - service: vehicle-service
+            dockerfile: infra/docker/vehicle-service.Dockerfile
+          - service: inspection-service
+            dockerfile: infra/docker/inspection-service.Dockerfile
+          - service: fix-jobs
+            dockerfile: infra/docker/fix-jobs.Dockerfile
+          - service: alert-service
+            dockerfile: infra/docker/alert-service.Dockerfile
+          - service: subscription-service
+            dockerfile: infra/docker/subscription-service.Dockerfile
+          - service: api-gateway
+            dockerfile: infra/docker/api-gateway.Dockerfile
+          - service: web
+            dockerfile: infra/docker/web.Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.service }}
+        env:
+          DOCKER_BUILDKIT: '1'
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.ORG }}/motacare/${{ matrix.service }}"
+          TAG="${{ github.sha }}"
+
+          docker buildx build \
+            --file ${{ matrix.dockerfile }} \
+            --target production \
+            --tag "${IMAGE}:${TAG}" \
+            --tag "${IMAGE}:latest" \
+            --cache-from type=local,src=/tmp/buildkit-cache/${{ matrix.service }} \
+            --cache-to   type=local,dest=/tmp/buildkit-cache/${{ matrix.service }},mode=max \
+            --push \
+            --build-arg BUILD_SHA="${TAG}" \
+            --progress plain \
+            .
+
+  # ── Deploy to Kubernetes after all images are built ───────
+  deploy:
+    name: Deploy to production
+    runs-on: self-hosted
+    needs: build
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://app.motacare.ng
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        run: |
+          # Assumes kubeconfig is available on the self-hosted runner.
+          # For cloud providers, use their CLI action instead:
+          #   - AWS: aws/setup-kubectl
+          #   - GCP: google-github-actions/setup-gcloud
+          kubectl version --client
+
+      - name: Deploy
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          chmod +x infra/k8s/scripts/deploy.sh
+          IMAGE_TAG=${{ github.sha }} infra/k8s/scripts/deploy.sh
+
+      - name: Verify deployment
+        run: |
+          # Hit the health endpoint and fail the deploy if it's down
+          sleep 10
+          curl -sf https://api.motacare.ng/health | jq .
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Deployment failed — rolling back"
+          kubectl rollout undo deployment/api-gateway -n motacare || true
+          kubectl rollout undo deployment/web -n motacare || true

@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: motacare
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  clusterIP: None   # headless — StatefulSet pods need stable DNS
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: motacare
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: motacare-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: motacare-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: "motacare"
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-init
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "motacare"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "motacare"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+      volumes:
+        - name: postgres-init
+          configMap:
+            name: postgres-init-sql
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi
+
+---
+# Init SQL run once on first boot — creates all service databases
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-sql
+  namespace: motacare
+data:
+  init.sql: |
+    CREATE DATABASE motacare_auth;
+    CREATE DATABASE motacare_vehicles;
+    CREATE DATABASE motacare_inspections;
+    CREATE DATABASE motacare_fixjobs;
+    CREATE DATABASE motacare_subscriptions;
+    GRANT ALL PRIVILEGES ON DATABASE motacare_auth TO motacare;
+    GRANT ALL PRIVILEGES ON DATABASE motacare_vehicles TO motacare;
+    GRANT ALL PRIVILEGES ON DATABASE motacare_inspections TO motacare;
+    GRANT ALL PRIVILEGES ON DATABASE motacare_fixjobs TO motacare;
+    GRANT ALL PRIVILEGES ON DATABASE motacare_subscriptions TO motacare;

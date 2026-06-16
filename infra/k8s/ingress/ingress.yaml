@@ -1,0 +1,157 @@
+# ============================================================
+# NGINX INGRESS CONTROLLER
+#
+# Prerequisites:
+#   1. Ingress controller: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.0/deploy/static/provider/cloud/deploy.yaml
+#   2. cert-manager:       kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.4/cert-manager.yaml
+#   3. DNS: Point these A records at your cluster's LoadBalancer IP:
+#        app.motacare.ng    → <EXTERNAL-IP>
+#        api.motacare.ng    → <EXTERNAL-IP>
+#
+# Get the EXTERNAL-IP after installing ingress-nginx:
+#   kubectl get svc ingress-nginx-controller -n ingress-nginx
+# ============================================================
+
+# ── cert-manager ClusterIssuer for Let's Encrypt TLS ──
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    # REPLACE with your real email — used for cert expiry warnings
+    email: devops@motacare.ng
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+
+---
+# ── API Ingress — api.motacare.ng → api-gateway ──
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: motacare-api-ingress
+  namespace: motacare
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+
+    # Rate limiting — prevent abuse (200 req/min per IP)
+    nginx.ingress.kubernetes.io/limit-rps: "200"
+    nginx.ingress.kubernetes.io/limit-connections: "20"
+
+    # Proxy timeouts (important for long-running inspection operations)
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+
+    # Body size — allow inspection photo uploads up to 20MB
+    nginx.ingress.kubernetes.io/proxy-body-size: "20m"
+
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
+    # CORS — allow requests from the web frontend
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://app.motacare.ng"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, Accept"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.motacare.ng
+      secretName: motacare-api-tls
+  rules:
+    - host: api.motacare.ng
+      http:
+        paths:
+          # Stripe webhooks go directly to subscription-service —
+          # they need raw body, NOT the api-gateway JSON parser
+          - path: /webhooks/stripe
+            pathType: Exact
+            backend:
+              service:
+                name: subscription-service
+                port:
+                  number: 3007
+
+          # Everything else → api-gateway
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 3000
+
+---
+# ── Web Ingress — app.motacare.ng → Next.js ──
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: motacare-web-ingress
+  namespace: motacare
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+
+    # Next.js needs WebSocket support for HMR (dev) — harmless in prod
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+
+    # Redirect www → apex
+    nginx.ingress.kubernetes.io/from-to-www-redirect: "true"
+
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - app.motacare.ng
+      secretName: motacare-web-tls
+  rules:
+    - host: app.motacare.ng
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 3005
+
+---
+# ── HTTP → HTTPS redirect ──
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: motacare-https-redirect
+  namespace: motacare
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: app.motacare.ng
+    - host: api.motacare.ng
