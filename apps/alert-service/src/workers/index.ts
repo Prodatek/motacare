@@ -78,7 +78,7 @@ export const alertWorker = new Worker<FixJobAlertJobData>(
         jobDescription: description,
         estimatedCompletionAt: new Date(estimatedCompletionAt),
       });
-      emailJobs.push(emailQueue.add(`fixer-${fixJobId}-${alertType}`, {
+      emailJobs.push(emailQueue.add(`fixer-${fixJobId}-${alertType}` as string, {
         to: fixer.email, subject, html, text,
       }));
     }
@@ -93,7 +93,7 @@ export const alertWorker = new Worker<FixJobAlertJobData>(
         jobDescription: description,
         estimatedCompletionAt: new Date(estimatedCompletionAt),
       });
-      emailJobs.push(emailQueue.add(`owner-${fixJobId}-${alertType}`, {
+      emailJobs.push(emailQueue.add(`owner-${fixJobId}-${alertType}` as string, {
         to: owner.email, subject, html, text,
       }));
     }
@@ -113,7 +113,7 @@ export const alertWorker = new Worker<FixJobAlertJobData>(
     console.log(`[alert-worker] ✅ ${alertType} alert sent for job ${fixJobId}`);
   },
   {
-    connection: redisConnection,
+    connection: redisConnection as any,
     concurrency: 5,
   },
 );
@@ -141,7 +141,7 @@ export const emailWorker = new Worker<EmailJobData>(
     console.log(`[email-worker] ✅ Sent "${subject}" to ${to}`);
   },
   {
-    connection: redisConnection,
+    connection: redisConnection as any,
     concurrency: 10,
   },
 );

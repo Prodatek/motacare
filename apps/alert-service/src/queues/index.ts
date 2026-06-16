@@ -54,10 +54,10 @@ export interface EmailJobData {
 // ============================================================
 
 // Alert scheduler queue — jobs are delayed and fire at the right time
-export const fixJobAlertsQueue = new Queue<FixJobAlertJobData>(
+export const fixJobAlertsQueue = new Queue<FixJobAlertJobData, unknown, string>(
   QUEUE_NAMES.FIX_JOB_ALERTS,
   {
-    connection: redisConnection,
+    connection: redisConnection as any,
     defaultJobOptions: {
       removeOnComplete: { count: 100 },
       removeOnFail: { count: 50 },
@@ -69,10 +69,10 @@ export const fixJobAlertsQueue = new Queue<FixJobAlertJobData>(
 
 // Email send queue — decoupled from alert logic so email failures
 // don't block the alert system
-export const emailQueue = new Queue<EmailJobData>(
+export const emailQueue = new Queue<EmailJobData, unknown, string>(
   QUEUE_NAMES.EMAIL_SEND,
   {
-    connection: redisConnection,
+    connection: redisConnection as any,
     defaultJobOptions: {
       removeOnComplete: { count: 200 },
       removeOnFail: { count: 100 },
@@ -110,7 +110,7 @@ export async function scheduleFixJobAlerts(
     // Only schedule future alerts
     if (delay > 0) {
       await fixJobAlertsQueue.add(
-        `${fixJobId}:${alertType}`,
+        `${fixJobId}:${alertType}` as string,
         { ...data, fixJobId, alertType },
         {
           delay,
