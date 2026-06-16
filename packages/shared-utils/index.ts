@@ -132,3 +132,9 @@ export function addHours(date: Date, hours: number): Date {
 export function isExpired(date: Date): boolean {
   return new Date() > date;
 }
+
+// ============================================================
+// FEATURE GATE / SUBSCRIPTION LIMITS
+// ============================================================
+
+export { checkFeatureLimit, type FeatureLimitCheck } from './src/feature-gate';

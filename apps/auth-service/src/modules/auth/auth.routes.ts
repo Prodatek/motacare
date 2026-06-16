@@ -151,7 +151,50 @@ export async function authRoutes(fastify: FastifyInstance) {
       return reply.status(200).send({ statusCode: 200, data: user });
     },
   );
-
+   // Used by alert-service to resolve user email + name for notifications
+  fastify.post(
+    '/internal/user-by-id',
+    {
+      schema: {
+        tags: ['Internal'],
+        summary: 'Internal: look up a user by their ID',
+        hide: true,
+        body: {
+          type: 'object',
+          required: ['userId'],
+          properties: { userId: { type: 'string', format: 'uuid' } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { userId } = request.body as { userId: string };
+      const { eq } = await import('drizzle-orm');
+      const { db } = await import('../../db');
+      const { users } = await import('../../db/schema');
+ 
+      const user = await db.query.users.findFirst({
+        where: eq(users.id, userId),
+        columns: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          isActive: true,
+        },
+      });
+ 
+      if (!user || !user.isActive) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'User not found',
+        });
+      }
+ 
+      return reply.status(200).send({ statusCode: 200, data: user });
+    },
+  );
   // Internal: look up a user by ID (used by other services to display names)
   fastify.get(
     '/internal/user/:id',

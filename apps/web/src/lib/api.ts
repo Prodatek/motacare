@@ -246,15 +246,26 @@ export const inspectionApi = {
 
 export const fixJobApi = {
 
-  list: (params?: { page?: number; limit?: number; status?: string; vehicleHash?: string }) => {
+  list: (params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    statuses?: string[];   // NEW — e.g. ['PENDING', 'IN_PROGRESS', 'AWAITING_PARTS']
+    vehicleHash?: string;
+  }) => {
+    const { statuses, ...rest } = params ?? {};
     const query = new URLSearchParams(
-      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any,
-    ).toString();
-    return request<PaginatedResponse<FixJob>>(`/fix-jobs${query ? `?${query}` : ''}`);
+      Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) as any,
+    );
+    if (statuses?.length) {
+      query.set('statuses', statuses.join(','));
+    }
+    const qs = query.toString();
+    return request<PaginatedResponse<FixJob>>(`/fix-jobs${qs ? `?${qs}` : ''}`);
   },
 
   get: (id: string) =>
-    request<FixJobWithHistory>(`/fix-jobs/${id}`),
+    request<FixJobWithHistory | FixJob>(`/fix-jobs/${id}`),
 
   update: (id: string, payload: {
     status?: string;
@@ -280,4 +291,76 @@ export const fixJobApi = {
   // Alias used from inspection modal
   createFixJob: (payload: Parameters<typeof inspectionApi.createFixJob>[0]) =>
     inspectionApi.createFixJob(payload),
+};
+// ============================================================
+// SUBSCRIPTION API — add this section to apps/web/src/lib/api.ts
+// ============================================================
+
+export interface PlanFeatures {
+  vehiclesAllowed: number;
+  inspectionsPerMonth: number;
+  fixersAllowed: number;
+  canExportReports: boolean;
+  canAccessObd: boolean;
+  canAccessAiSummary: boolean;
+}
+
+export interface PlanInfo {
+  name: string;
+  price: { monthly: number; yearly: number };
+  features: PlanFeatures;
+  description: string;
+}
+
+export interface PlansResponse {
+  FREE: PlanInfo;
+  PRO: PlanInfo;
+  WORKSHOP: PlanInfo;
+}
+
+export interface Subscription {
+  id: string;
+  userId: string;
+  tier: 'FREE' | 'PRO' | 'WORKSHOP';
+  status: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'EXPIRED' | 'TRIALING';
+  billingInterval: 'MONTHLY' | 'YEARLY' | null;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  trialEndsAt: string | null;
+  vehiclesAllowed: number;
+  inspectionsPerMonth: number;
+  fixersAllowed: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const subscriptionApi = {
+
+  // Public — plan comparison table, no auth needed
+  getPlans: () => request<PlansResponse>('/subscriptions/plans'),
+
+  // Current user's subscription (auto-creates FREE record if none exists)
+  getMySubscription: () => request<Subscription>('/subscriptions/me'),
+
+  // Start a Stripe Checkout session — returns a URL to redirect to
+  createCheckout: (tier: 'PRO' | 'WORKSHOP', billingInterval: 'MONTHLY' | 'YEARLY') =>
+    request<{ url: string }>('/subscriptions/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ tier, billingInterval }),
+    }),
+
+  // Open Stripe's billing portal — manage payment method, cancel, view invoices
+  createPortalSession: (returnUrl?: string) =>
+    request<{ url: string }>('/subscriptions/portal', {
+      method: 'POST',
+      body: JSON.stringify(returnUrl ? { returnUrl } : {}),
+    }),
+
+  // Cancel subscription — immediately or at period end
+  cancel: (immediately: boolean = false) =>
+    request<Subscription>('/subscriptions/cancel', {
+      method: 'POST',
+      body: JSON.stringify({ immediately }),
+    }),
 };

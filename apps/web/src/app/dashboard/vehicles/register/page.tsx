@@ -30,19 +30,38 @@ export default function RegisterVehiclePage() {
   const router = useRouter();
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { fuelType: 'PETROL', transmissionType: 'MANUAL', mileageAtRegistration: 0 },
+    defaultValues: { fuelType: 'PETROL', transmissionType: 'MANUAL', mileageAtRegistration: 0, trim: '', engineCode: '' },
   });
 
   const onSubmit = async (data: FormData) => {
     try {
       const vehicle = await vehicleApi.register(data);
-      toast.success('Vehicle registered successfully!');
+      toast.success('Vehicle registered!');
       router.push(`/dashboard/vehicles/${vehicle.hash}`);
+ 
     } catch (error) {
+      if (error instanceof ApiClientError && error.error === 'Plan Limit Exceeded') {
+        const details = error.details as { limit?: number; tier?: string } | undefined;
+    
+        toast.error(
+          `You've reached your ${details?.tier ?? 'current'} plan limit ` +
+          `of ${details?.limit ?? '?'} vehicle${details?.limit === 1 ? '' : 's'}. ` +
+          `Redirecting you to upgrade…`,
+          { duration: 3000 },
+        );
+    
+        // Give the user a moment to read the toast, then redirect.
+        setTimeout(() => {
+          router.push('/dashboard/subscription');
+        }, 2000);
+    
+        return;
+      }
+    
       if (error instanceof ApiClientError) {
         toast.error(error.message);
       } else {
-        toast.error('Failed to register vehicle. Please try again.');
+        toast.error('Failed to register vehicle');
       }
     }
   };

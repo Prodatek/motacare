@@ -1,4 +1,4 @@
-import { eq, and, desc, count } from 'drizzle-orm';
+import { eq, and, desc, count, gte } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   inspections,
@@ -9,7 +9,7 @@ import {
   type FixJob,
 } from '../../db/schema';
 import { env } from '../../config/env';
-import { parsePagination, buildPaginationMeta } from '@motacare/shared-utils';
+import { parsePagination, buildPaginationMeta, checkFeatureLimit } from '@motacare/shared-utils';
 import {
   buildInitialInspectionItems,
   computeChecklistStats,
@@ -51,6 +51,19 @@ export class ConflictError extends Error {
 }
 export class BadRequestError extends Error {
   constructor(msg: string) { super(msg); this.name = 'BadRequestError'; }
+}
+export class PlanLimitExceededError extends Error {
+  constructor(
+    public readonly resource: string,
+    public readonly limit: number,
+    public readonly tier: string,
+  ) {
+    super(
+      `The vehicle owner's ${tier} plan allows up to ${limit} ${resource} per month. ` +
+      `They'll need to upgrade their plan before more inspections can be started.`,
+    );
+    this.name = 'PlanLimitExceededError';
+  }
 }
 
 // ============================================================
@@ -106,7 +119,29 @@ export class InspectionService {
   ): Promise<Inspection & { items: InspectionItem[]; aiSummaryHint?: string; fallbackUsed?: boolean }> {
 
     const vehicle = await verifyVehicleHash(input.vehicleHash);
-
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+ 
+    const [{ value: inspectionsThisMonth }] = await db
+      .select({ value: count() })
+      .from(inspections)
+      .where(and(
+        eq(inspections.ownerId, vehicle.ownerId),
+        gte(inspections.createdAt, startOfMonth),
+      ));
+ 
+    const limitCheck = await checkFeatureLimit(
+      env.SUBSCRIPTION_SERVICE_URL,
+      vehicle.ownerId,
+      'inspections',
+      Number(inspectionsThisMonth),
+    );
+ 
+    if (!limitCheck.allowed) {
+      throw new PlanLimitExceededError('inspections', limitCheck.limit, limitCheck.tier);
+    }
+    
     const existingActive = await db.query.inspections.findFirst({
       where: and(
         eq(inspections.vehicleHash, input.vehicleHash),

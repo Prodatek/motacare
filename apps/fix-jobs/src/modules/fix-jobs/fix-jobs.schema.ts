@@ -59,13 +59,24 @@ export const cancelFixJobSchema = z.object({
 // QUERY PARAMS
 // ============================================================
 
+export const FIX_JOB_STATUSES = [
+  'PENDING', 'IN_PROGRESS', 'AWAITING_PARTS',
+  'COMPLETED', 'DELIVERED', 'CANCELLED',
+] as const;
+ 
 export const fixJobQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
-  status: z.enum([
-    'PENDING', 'IN_PROGRESS', 'AWAITING_PARTS',
-    'COMPLETED', 'DELIVERED', 'CANCELLED',
-  ]).optional(),
+ 
+  // Single status (existing — kept for backward compatibility)
+  status: z.enum(FIX_JOB_STATUSES).optional(),
+ 
+  // NEW: comma-separated list of statuses, e.g. "PENDING,IN_PROGRESS,AWAITING_PARTS"
+  statuses: z.string()
+    .optional()
+    .transform((val) => val?.split(',').map((s) => s.trim()))
+    .pipe(z.array(z.enum(FIX_JOB_STATUSES)).optional()),
+ 
   vehicleHash: z.string().length(64).optional(),
 });
 

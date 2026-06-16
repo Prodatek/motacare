@@ -13,6 +13,8 @@ import { useAuth } from '@/lib/auth';
 import type { Vehicle } from '@motacare/shared-types';
 import { formatDate, cn } from '@/lib/utils';
 
+
+
 // ── Start Inspection Modal ──────────────────────────────────
 
 function StartInspectionModal({
@@ -24,6 +26,7 @@ function StartInspectionModal({
   onClose: () => void;
   onCreated: (inspectionId: string) => void;
 }) {
+  const router = useRouter();
   const [mileage, setMileage] = useState('');
   const [symptoms, setSymptoms] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,6 +49,25 @@ function StartInspectionModal({
       toast.success('Inspection session started!');
       onCreated((inspection as any).id);
     } catch (error) {
+      if (error instanceof ApiClientError && error.error === 'Plan Limit Exceeded') {
+        const details = error.details as { limit?: number; tier?: string } | undefined;
+
+        toast.error(
+          `The vehicle owner's ${details?.tier ?? 'current'} plan allows ` +
+          `${details?.limit ?? '?'} inspection${details?.limit === 1 ? '' : 's'} per month — ` +
+          `that limit has been reached. Redirecting to subscription…`,
+          { duration: 3000 },
+        );
+
+        onClose(); // close the modal first
+
+        setTimeout(() => {
+          router.push('/dashboard/subscription');
+        }, 2000);
+
+        return;
+      }
+
       if (error instanceof ApiClientError) toast.error(error.message);
       else toast.error('Failed to start inspection');
     } finally {

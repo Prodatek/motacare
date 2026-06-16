@@ -5,6 +5,7 @@ import {
   ForbiddenError,
   ConflictError,
   BadRequestError,
+  PlanLimitExceededError
 } from './inspection.service';
 import {
   createInspectionSchema,
@@ -164,7 +165,19 @@ export class InspectionController {
       return reply.status(409).send({ statusCode: 409, error: 'Conflict', message: error.message });
     if (error instanceof BadRequestError)
       return reply.status(400).send({ statusCode: 400, error: 'Bad Request', message: error.message });
-
+    if (error instanceof PlanLimitExceededError) {
+      return reply.status(403).send({
+        statusCode: 403,
+        error: 'Plan Limit Exceeded',
+        message: error.message,
+        details: {
+          resource: error.resource,
+          limit: error.limit,
+          tier: error.tier,
+          upgradeUrl: '/dashboard/subscription',
+        },
+      });
+    }
     console.error('Unhandled error in inspection controller:', error);
     return reply.status(500).send({ statusCode: 500, error: 'Internal Server Error', message: 'An unexpected error occurred' });
   }

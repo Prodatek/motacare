@@ -5,6 +5,7 @@ import {
   VehicleAlreadyRegisteredError,
   ForbiddenError,
   ConflictError,
+  PlanLimitExceededError,
 } from './vehicle.service';
 import {
   registerVehicleSchema,
@@ -30,7 +31,7 @@ export class VehicleController {
         message: 'Invalid request body',
         details: parsed.error.flatten().fieldErrors,
       });
-    }
+    }    // Plan limit errors are handled in the central error handler below
 
     try {
       const { sub: ownerId } = request.user as { sub: string };
@@ -238,6 +239,19 @@ export class VehicleController {
     }
     if (error instanceof ConflictError) {
       return reply.status(409).send({ statusCode: 409, error: 'Conflict', message: error.message });
+    }
+    if (error instanceof PlanLimitExceededError) {
+      return reply.status(403).send({
+        statusCode: 403,
+        error: 'Plan Limit Exceeded',
+        message: error.message,
+        details: {
+          resource: error.resource,
+          limit: error.limit,
+          tier: error.tier,
+          upgradeUrl: '/dashboard/subscription',
+        },
+      });
     }
 
     console.error('Unhandled error in vehicle controller:', error);
