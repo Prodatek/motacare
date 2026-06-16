@@ -45,7 +45,7 @@ jobs:
   # ============================================================
   setup:
     name: Setup
-    runs-on: Ubuntu
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       cache-key: ${{ steps.cache-key.outputs.key }}
@@ -108,7 +108,7 @@ jobs:
   # ============================================================
   lint:
     name: Lint
-    runs-on: Ubuntu
+    runs-on: ubuntu-latest
     needs: setup
     timeout-minutes: 6
     steps:
@@ -161,7 +161,7 @@ jobs:
   # ============================================================
   typecheck:
     name: Type check
-    runs-on: Ubuntu
+    runs-on: ubuntu-latest
     needs: setup
     timeout-minutes: 8
     steps:
@@ -215,7 +215,7 @@ jobs:
   # ============================================================
   test:
     name: Test / ${{ matrix.service }}
-    runs-on: Ubuntu
+    runs-on: ubuntu-latest
     needs: setup
     timeout-minutes: 8
 
@@ -297,7 +297,7 @@ jobs:
   # ============================================================
   docker-build:
     name: Docker / ${{ matrix.service }}
-    runs-on: Ubuntu
+    runs-on: ubuntu-latest
     needs: setup
     timeout-minutes: 15
 
@@ -356,7 +356,7 @@ jobs:
   # ============================================================
   pr-summary:
     name: PR Summary
-    runs-on: Ubuntu
+    runs-on: ubuntu-latest
     needs: [lint, typecheck, test, docker-build]
     if: always()
     timeout-minutes: 3
