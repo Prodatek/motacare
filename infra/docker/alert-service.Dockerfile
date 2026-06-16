@@ -44,6 +44,8 @@ COPY --from=builder /app/tsconfig.base.json ./
 COPY --from=builder /app/apps/alert-service/package.json ./
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
+COPY --from=base /app/package.json ./
+COPY --from=base /app/turbo.json ./
 
 RUN npm install --omit=dev
 RUN addgroup --system --gid 1001 nodejs
