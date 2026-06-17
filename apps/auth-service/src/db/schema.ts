@@ -5,7 +5,7 @@ import { relations } from 'drizzle-orm';
 // ENUMS
 // ============================================================
 
-export const userRoleEnum = pgEnum('user_role', ['OWNER', 'FIXER', 'ADMIN']);
+export const userRoleEnum = pgEnum('user_role', ['OWNER', 'FIXER', 'WORKSHOP_ADMIN', 'ADMIN']);
 
 export const subscriptionTierEnum = pgEnum('subscription_tier', ['FREE', 'PRO', 'WORKSHOP']);
 
@@ -34,6 +34,7 @@ export const users = pgTable(
     // Fixer-specific fields
     workshopName: varchar('workshop_name', { length: 200 }),
     workshopAddress: text('workshop_address'),
+    workshopId: uuid('workshop_id'), 
 
     // Account state
     isActive: boolean('is_active').notNull().default(true),

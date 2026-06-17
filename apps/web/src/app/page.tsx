@@ -4,6 +4,80 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Car, ClipboardCheck, Shield, Zap, LogOut } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { workshopApi } from '@/lib/api';
+import type { Workshop } from '@/lib/api';
+import { MapPin, Star, ChevronRight } from 'lucide-react';
+
+
+
+function FeaturedWorkshopCard({ w }: { w: Workshop }) {
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.04)',
+      border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: 16,
+      padding: '1.25rem',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 12,
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{w.name}</h3>
+            {w.featured && (
+              <span style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', fontSize: 11, padding: '2px 7px', borderRadius: 999, fontWeight: 500 }}>
+                ★ Featured
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-tertiary)', fontSize: 12 }}>
+            <MapPin style={{ width: 12, height: 12 }} />
+            {w.city}, {w.state}
+          </div>
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{w.currentFixerCount}/{w.maxFixers}</p>
+          <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>fixers</p>
+        </div>
+      </div>
+ 
+      {/* Description */}
+      {w.description && (
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>{w.description}</p>
+      )}
+ 
+      {/* Specialties */}
+      {w.specialties.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {w.specialties.slice(0, 4).map((s) => (
+            <span key={s} style={{
+              background: 'rgba(239,68,68,0.1)', color: 'var(--brand-400)',
+              fontSize: 11, padding: '2px 8px', borderRadius: 6, fontWeight: 500,
+            }}>{s}</span>
+          ))}
+          {w.specialties.length > 4 && (
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>+{w.specialties.length - 4} more</span>
+          )}
+        </div>
+      )}
+ 
+      {/* Stats */}
+      <div style={{ display: 'flex', gap: 16, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12 }}>
+        {[
+          { label: 'Inspections', value: w.totalInspections },
+          { label: 'Fix Jobs',    value: w.totalFixJobs },
+        ].map(({ label, value }) => (
+          <div key={label}>
+            <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{value}</p>
+            <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>{label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function HomePage() {
   const { isAuthenticated, isLoading, user, logout } = useAuth();
@@ -11,6 +85,12 @@ export default function HomePage() {
   // Avoid hydration flicker
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  const [featuredWorkshops, setFeaturedWorkshops] = useState<Workshop[]>([]);
+  useEffect(() => {
+    workshopApi.featured()
+      .then((r) => setFeaturedWorkshops(r?.data ?? []))
+      .catch(() => {}); // Landing page — fail silently
+  }, []);
 
   return (
     <main className="min-h-screen bg-white">
@@ -149,6 +229,32 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {featuredWorkshops.length > 0 && (
+        <section style={{ background: 'rgba(255,255,255,0.02)', padding: '80px 24px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32, flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <h2 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 6px' }}>
+                  Featured Workshops
+                </h2>
+                <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>
+                  Trusted workshops using Motacare to deliver transparent, documented service
+                </p>
+              </div>
+              <Link href="/workshops" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--brand-400)', textDecoration: 'none', fontWeight: 500 }}>
+                View all workshops <ChevronRight style={{ width: 15, height: 15 }} />
+              </Link>
+            </div>
+ 
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
+              {featuredWorkshops.map((w) => (
+                <FeaturedWorkshopCard key={w.id} w={w} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── Footer ── */}
       <footer className="border-t border-gray-100 py-8 text-center text-sm text-gray-400">

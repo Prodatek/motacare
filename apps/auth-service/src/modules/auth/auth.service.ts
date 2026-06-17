@@ -114,7 +114,7 @@ export class AuthService {
       .where(eq(users.id, user.id));
 
     // 5. Generate tokens (store refresh token with session metadata)
-    const tokens = await this.generateTokenPair(user.id, user.role, meta);
+    const tokens = await this.generateTokenPair(user.id, user.role, user.workshopId, meta);
 
     return {
       user: this.sanitizeUser(user),

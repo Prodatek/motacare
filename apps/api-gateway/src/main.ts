@@ -14,6 +14,7 @@ import { registerInspectionProxy } from './routes/inspection.proxy';
 import { registerFixJobsProxy } from './routes/fix-jobs.proxy';
 import { buildRateLimitErrorResponse } from './middleware/rate-limit';
 import { registerSubscriptionProxy } from './routes/subscription.proxy';
+import { registerWorkshopProxy } from './routes/workshop.proxy';
 
 // ============================================================
 // SERVER FACTORY — exported for testing
@@ -120,6 +121,7 @@ export async function buildServer() {
   // ----------------------------------------------------------
 
   await registerAuthMiddleware(fastify);
+  await registerWorkshopProxy(fastify);
 
   // ----------------------------------------------------------
   // HEALTH CHECK
@@ -133,6 +135,7 @@ export async function buildServer() {
       fetch(`${env.INSPECTION_SERVICE_URL}/health`).then((r) => ({ service: 'inspection', ok: r.ok })),
       fetch(`${env.FIX_JOBS_SERVICE_URL}/health`).then((r) => ({ service: 'fix-jobs', ok: r.ok })),
       fetch(`${env.SUBSCRIPTION_SERVICE_URL}/health`).then((r) => ({ service: 'subscription', ok: r.ok })),
+      fetch(`${env.WORKSHOP_SERVICE_URL}/health`).then((r) => ({ service: 'workshop', ok: r.ok })),
     ]);
 
     const results = checks.map((c) =>
@@ -164,6 +167,7 @@ export async function buildServer() {
   await registerInspectionProxy(fastify);
   await registerFixJobsProxy(fastify);
   await registerSubscriptionProxy(fastify);
+  await registerWorkshopProxy(fastify);
 
   // ----------------------------------------------------------
   // 404 HANDLER — catches any unmatched route
