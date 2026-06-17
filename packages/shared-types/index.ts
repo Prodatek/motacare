@@ -7,7 +7,7 @@
 // USER TYPES
 // ============================================================
 
-export type UserRole = 'OWNER' | 'FIXER' | 'ADMIN';
+export type UserRole = 'OWNER' | 'FIXER' | 'WORKSHOP_ADMIN' | 'ADMIN';
 export type SubscriptionTier = 'FREE' | 'PRO' | 'WORKSHOP';
 
 export interface BaseUser {
@@ -26,9 +26,9 @@ export interface BaseUser {
 }
 
 export interface FixerUser extends BaseUser {
-  role: 'FIXER';
-  workshopName: string;
-  workshopAddress?: string | null;
+  role: 'FIXER' | 'WORKSHOP_ADMIN';
+  workshopId?: string | null;         // UUID of the workshop they belong to
+  workshopName?: string | null;       // denormalised for convenience
 }
 
 export interface OwnerUser extends BaseUser {
@@ -166,4 +166,82 @@ export interface PaginatedResponse<T> {
     limit: number;
     totalPages: number;
   };
+}
+
+
+// ============================================================
+// workshop UTILITY TYPES
+// ============================================================
+
+export type WorkshopStatus = 'PENDING_APPROVAL' | 'ACTIVE' | 'SUSPENDED';
+export type MembershipStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'LEFT';
+ 
+export interface Workshop {
+  id: string;
+  name: string;
+  description: string | null;
+  address: string;
+  city: string;
+  state: string;
+  phone: string | null;
+  email: string | null;
+  logoUrl: string | null;
+  coverImageUrl: string | null;
+  specialties: string[];           // e.g. ['Engine', 'Electrical', 'Tyres']
+  status: WorkshopStatus;
+  adminId: string;                 // The WORKSHOP_ADMIN user's ID
+  maxFixers: number;               // Always 5 in Phase 1
+  currentFixerCount: number;       // Denormalised for fast listing
+  featured: boolean;               // Admin-set, shows on landing page
+  rating: number | null;           // Computed from completed fix jobs (Phase 3)
+  totalInspections: number;        // Lifetime count
+  totalFixJobs: number;            // Lifetime count
+  createdAt: Date;
+  updatedAt: Date;
+}
+ 
+export interface WorkshopMember {
+  id: string;
+  workshopId: string;
+  fixerId: string;
+  status: MembershipStatus;
+  joinedAt: Date | null;
+  leftAt: Date | null;
+  rejectionReason: string | null;
+  // Populated in list responses
+  fixer?: Pick<BaseUser, 'id' | 'firstName' | 'lastName' | 'email'>;
+}
+ 
+// Stats returned by GET /workshops/:id/stats (workshop admin only)
+export interface WorkshopStats {
+  workshopId: string;
+  period: { from: string; to: string };
+ 
+  // Top-level
+  totalInspections: number;
+  completedInspections: number;
+  totalFixJobs: number;
+  completedFixJobs: number;
+  deliveredFixJobs: number;
+  totalRevenue: number;            // Sum of finalCost on delivered jobs
+  currency: string;
+ 
+  // Per-fixer breakdown
+  byFixer: Array<{
+    fixerId: string;
+    fixerName: string;
+    inspections: number;
+    fixJobs: number;
+    completedFixJobs: number;
+    revenue: number;
+    avgFixJobDurationHours: number | null;
+  }>;
+ 
+  // Over-time (weekly buckets for the period)
+  trend: Array<{
+    week: string;   // ISO date of Monday
+    inspections: number;
+    fixJobs: number;
+    revenue: number;
+  }>;
 }
