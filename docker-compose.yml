@@ -216,11 +216,18 @@ services:
     networks:
       - motacare-network
     depends_on:
-      - auth-service
-      - vehicle-service
-      - inspection-service
-      - fix-jobs
-      - subscription-service
+      workshop-service:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      vehicle-service:
+        condition: service_started
+      inspection-service:
+        condition: service_started
+      fix-jobs:
+        condition: service_started
+      subscription-service:
+        condition: service_started
   
   fix-jobs:
     build:

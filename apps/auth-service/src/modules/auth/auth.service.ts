@@ -48,10 +48,7 @@ export class AuthService {
       throw new ConflictError('An account with this email already exists');
     }
 
-    // 2. Validate fixer-specific fields
-    if (input.role === 'FIXER' && !input.workshopName) {
-      throw new ValidationError('Workshop name is required for fixer accounts');
-    }
+  
 
     // 3. Hash password
     const passwordHash = await bcrypt.hash(input.password, env.BCRYPT_SALT_ROUNDS);
@@ -73,7 +70,7 @@ export class AuthService {
       .returning();
 
     // 5. Generate tokens
-    const tokens = await this.generateTokenPair(newUser.id, newUser.role);
+    const tokens = await this.generateTokenPair(newUser.id, newUser.role, null);
 
     return {
       user: this.sanitizeUser(newUser),
@@ -114,7 +111,7 @@ export class AuthService {
       .where(eq(users.id, user.id));
 
     // 5. Generate tokens (store refresh token with session metadata)
-    const tokens = await this.generateTokenPair(user.id, user.role, user.workshopId, meta);
+    const tokens = await this.generateTokenPair(user.id, user.role, user.workshopId ?? null, meta);
 
     return {
       user: this.sanitizeUser(user),
@@ -162,7 +159,7 @@ export class AuthService {
       throw new UnauthorizedError('User not found or account deactivated');
     }
 
-    return this.generateTokenPair(user.id, user.role);
+    return this.generateTokenPair(user.id, user.role, user.workshopId ?? null);
   }
 
   // ----------------------------------------------------------
@@ -199,10 +196,15 @@ export class AuthService {
   private async generateTokenPair(
     userId: string,
     role: string,
+    workshopId: string | null,
     meta: { userAgent?: string; ipAddress?: string } = {},
   ): Promise<TokenPair> {
     const accessToken = this.sign(
-      { sub: userId, role },
+      {
+        sub: userId,
+        role,
+        ...(workshopId ? { workshopId } : {}),
+      },
       { expiresIn: env.JWT_EXPIRES_IN },
     );
 

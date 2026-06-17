@@ -167,7 +167,6 @@ export async function buildServer() {
   await registerInspectionProxy(fastify);
   await registerFixJobsProxy(fastify);
   await registerSubscriptionProxy(fastify);
-  await registerWorkshopProxy(fastify);
 
   // ----------------------------------------------------------
   // 404 HANDLER — catches any unmatched route
@@ -203,7 +202,6 @@ export async function buildServer() {
 
 async function start() {
   const server = await buildServer();
-
   try {
     await server.listen({ port: env.PORT, host: '0.0.0.0' });
     console.log(`

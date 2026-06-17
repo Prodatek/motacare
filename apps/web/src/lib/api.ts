@@ -9,6 +9,71 @@ import type {
   PaginatedResponse,
 } from '@motacare/shared-types';
 
+
+// ============================================================
+// WORKSHOP-patch
+// ============================================================
+
+export interface Workshop {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  address: string;
+  city: string;
+  state: string;
+  phone: string | null;
+  email: string | null;
+  logoUrl: string | null;
+  coverImageUrl: string | null;
+  specialties: string[];
+  status: 'PENDING_APPROVAL' | 'ACTIVE' | 'SUSPENDED';
+  adminId: string;
+  maxFixers: number;
+  currentFixerCount: number;
+  featured: boolean;
+  totalInspections: number;
+  totalFixJobs: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkshopMember {
+  id: string;
+  workshopId: string;
+  fixerId: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'LEFT';
+  joinRequestNote: string | null;
+  rejectionReason: string | null;
+  joinedAt: string | null;
+  leftAt: string | null;
+  createdAt: string;
+}
+
+export interface WorkshopStats {
+  workshopId: string;
+  period: { from: string; to: string };
+  totalInspections: number;
+  completedInspections: number;
+  totalFixJobs: number;
+  completedFixJobs: number;
+  deliveredFixJobs: number;
+  totalRevenue: number;
+  currency: string;
+  byFixer: Array<{
+    fixerId: string;
+    fixerName: string;
+    inspections: number;
+    fixJobs: number;
+    completedFixJobs: number;
+    revenue: number;
+    avgFixJobDurationHours: number | null;
+  }>;
+  trend: Array<{ week: string; fixJobs: number; revenue: number }>;
+}
+
+
+
 // ============================================================
 // TYPES
 // ============================================================
@@ -292,6 +357,75 @@ export const fixJobApi = {
   createFixJob: (payload: Parameters<typeof inspectionApi.createFixJob>[0]) =>
     inspectionApi.createFixJob(payload),
 };
+
+export const workshopApi = {
+  list:     (params?: { page?: number; limit?: number; city?: string; search?: string; featured?: boolean }) => {
+    const query = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any,
+    ).toString();
+    return request<PaginatedResponse<Workshop>>(`/workshops${query ? `?${query}` : ''}`);
+  },
+  export const workshopApi = {
+  list: (params?: { page?: number; limit?: number; city?: string; search?: string; featured?: boolean }) => {
+    const query = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any,
+    ).toString();
+    return request<PaginatedResponse<Workshop>>(`/workshops${query ? `?${query}` : ''}`);
+  },
+ 
+  // ✅ Correct URL: /workshops/featured (plural, full word)
+  featured: () => request<PaginatedResponse<Workshop>>('/workshops/featured'),
+ 
+  get: (id: string) =>
+    request<Workshop & { members: WorkshopMember[] }>(`/workshops/${id}`),
+ 
+  getBySlug: (slug: string) =>
+    request<Workshop>(`/workshops/slug/${slug}`),
+ 
+  create: (payload: {
+    name: string; description?: string; address: string;
+    city: string; state: string; phone?: string; email?: string;
+    specialties?: string[];
+  }) =>
+    request<Workshop>('/workshops', { method: 'POST', body: JSON.stringify(payload) }),
+ 
+  update: (id: string, payload: Partial<{
+    name: string; description: string; address: string;
+    city: string; state: string; phone: string; email: string;
+    specialties: string[];
+  }>) =>
+    request<Workshop>(`/workshops/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+ 
+  join: (workshopId: string, note?: string) =>
+    request<WorkshopMember>('/workshops/join', {
+      method: 'POST',
+      body: JSON.stringify({ workshopId, note }),
+    }),
+ 
+  leave: (id: string) =>
+    request<void>(`/workshops/${id}/leave`, { method: 'POST' }),
+ 
+  getPending: (id: string) =>
+    request<WorkshopMember[]>(`/workshops/${id}/members/pending`),
+ 
+  handleMember: (
+    workshopId: string,
+    memberId: string,
+    action: 'APPROVE' | 'REJECT',
+    rejectionReason?: string,
+  ) =>
+    request<WorkshopMember>(`/workshops/${workshopId}/members/${memberId}`, {
+      method: 'POST',
+      body: JSON.stringify({ action, rejectionReason }),
+    }),
+ 
+  getStats: (id: string, from?: string, to?: string) => {
+    const q = new URLSearchParams(
+      Object.fromEntries(Object.entries({ from, to }).filter(([, v]) => v !== undefined) as any),
+    ).toString();
+    return request<WorkshopStats>(`/workshops/${id}/stats${q ? `?${q}` : ''}`);
+  },
+};
 // ============================================================
 // SUBSCRIPTION API — patch
 // ============================================================
@@ -363,111 +497,4 @@ export const subscriptionApi = {
       method: 'POST',
       body: JSON.stringify({ immediately }),
     }),
-};
-
-// ============================================================
-// WORKSHOP--patch
-// ============================================================
-
-export interface Workshop {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  address: string;
-  city: string;
-  state: string;
-  phone: string | null;
-  email: string | null;
-  logoUrl: string | null;
-  coverImageUrl: string | null;
-  specialties: string[];
-  status: 'PENDING_APPROVAL' | 'ACTIVE' | 'SUSPENDED';
-  adminId: string;
-  maxFixers: number;
-  currentFixerCount: number;
-  featured: boolean;
-  totalInspections: number;
-  totalFixJobs: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface WorkshopMember {
-  id: string;
-  workshopId: string;
-  fixerId: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'LEFT';
-  joinRequestNote: string | null;
-  rejectionReason: string | null;
-  joinedAt: string | null;
-  leftAt: string | null;
-  createdAt: string;
-}
-
-export interface WorkshopStats {
-  workshopId: string;
-  period: { from: string; to: string };
-  totalInspections: number;
-  completedInspections: number;
-  totalFixJobs: number;
-  completedFixJobs: number;
-  deliveredFixJobs: number;
-  totalRevenue: number;
-  currency: string;
-  byFixer: Array<{
-    fixerId: string;
-    fixerName: string;
-    inspections: number;
-    fixJobs: number;
-    completedFixJobs: number;
-    revenue: number;
-    avgFixJobDurationHours: number | null;
-  }>;
-  trend: Array<{ week: string; fixJobs: number; revenue: number }>;
-}
-
-export const workshopApi = {
-  list:     (params?: { page?: number; limit?: number; city?: string; search?: string; featured?: boolean }) => {
-    const query = new URLSearchParams(
-      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any,
-    ).toString();
-    return request<PaginatedResponse<Workshop>>(`/workshops${query ? `?${query}` : ''}`);
-  },
-
-  featured: () => request<PaginatedResponse<Workshop>>('/workshops/featured'),
-
-  get:      (id: string) => request<Workshop & { members: WorkshopMember[] }>(`/workshops/${id}`),
-  getBySlug: (slug: string) => request<Workshop>(`/workshops/slug/${slug}`),
-
-  create:   (payload: {
-    name: string; description?: string; address: string;
-    city: string; state: string; phone?: string; email?: string;
-    specialties?: string[];
-  }) => request<Workshop>('/workshops', { method: 'POST', body: JSON.stringify(payload) }),
-
-  update:   (id: string, payload: Partial<Parameters<typeof workshopApi.create>[0]>) =>
-    request<Workshop>(`/workshops/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-
-  join:     (workshopId: string, note?: string) =>
-    request<WorkshopMember>('/workshops/join', { method: 'POST', body: JSON.stringify({ workshopId, note }) }),
-
-  leave:    (id: string) =>
-    request<void>(`/workshops/${id}/leave`, { method: 'POST' }),
-
-  getPending: (id: string) =>
-    request<WorkshopMember[]>(`/workshops/${id}/members/pending`),
-
-  handleMember: (workshopId: string, memberId: string, action: 'APPROVE' | 'REJECT', rejectionReason?: string) =>
-    request<WorkshopMember>(`/workshops/${workshopId}/members/${memberId}`, {
-      method: 'POST',
-      body: JSON.stringify({ action, rejectionReason }),
-    }),
-
-  getStats: (id: string, from?: string, to?: string) => {
-    const q = new URLSearchParams(Object.fromEntries(
-      Object.entries({ from, to }).filter(([, v]) => v !== undefined) as any,
-    )).toString();
-    return request<WorkshopStats>(`/workshops/${id}/stats${q ? `?${q}` : ''}`);
-  },
 };

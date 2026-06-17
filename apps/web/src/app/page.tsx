@@ -86,6 +86,7 @@ export default function HomePage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const [featuredWorkshops, setFeaturedWorkshops] = useState<Workshop[]>([]);
+  
   useEffect(() => {
     workshopApi.featured()
       .then((r) => setFeaturedWorkshops(r?.data ?? []))

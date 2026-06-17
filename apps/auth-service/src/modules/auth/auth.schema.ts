@@ -6,13 +6,22 @@ import { pgTable, uuid, varchar, text, boolean, timestamp, pgEnum, index } from 
 // ============================================================
 
 export const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  firstName: z.string().nonempty(),
-  lastName: z.string().nonempty(),
-  phone: z.string().optional(),
-  role: z.enum(['OWNER', 'FIXER', 'ADMIN']).optional().default('OWNER'),
-  workshopName: z.string().optional(),
+  email: z.string().email('Invalid email address'),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+  firstName: z.string().min(1).max(100),
+  lastName:  z.string().min(1).max(100),
+  phone:     z.string().optional(),
+ 
+  // FIXER or OWNER — WORKSHOP_ADMIN is promoted, not self-registered
+  role: z.enum(['OWNER', 'FIXER']).default('OWNER'),
+ 
+  // Optional — solo fixers don't need a workshop name at registration.
+  // They can join a workshop later via the workshop-service.
+  workshopName:    z.string().max(200).optional(),
   workshopAddress: z.string().optional(),
 });
 
@@ -25,10 +34,18 @@ export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1),
 });
 
-export const changePasswordSchema = z.object({
-  oldPassword: z.string().min(8),
-  newPassword: z.string().min(8),
-});
+export const changePasswordSchema = z
+  .object({
+    currentPassword:    z.string().min(1),
+    newPassword:        z.string().min(8)
+      .regex(/[A-Z]/, 'Must contain an uppercase letter')
+      .regex(/[0-9]/, 'Must contain a number'),
+    confirmNewPassword: z.string().min(1),
+  })
+  .refine((d) => d.newPassword === d.confirmNewPassword, {
+    message: "Passwords don't match",
+    path: ['confirmNewPassword'],
+  });
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
