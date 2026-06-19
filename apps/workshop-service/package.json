@@ -21,7 +21,7 @@
     "@fastify/swagger-ui": "^3.0.0",
     "@motacare/shared-types": "*",
     "@motacare/shared-utils": "*",
-    "drizzle-orm": "^0.30.10",
+    "drizzle-orm": "^0.45.2",
     "fastify": "^4.27.0",
     "pg": "^8.11.5",
     "zod": "^3.23.8"
