@@ -40,7 +40,7 @@ export async function fixJobRoutes(fastify: FastifyInstance) {
 
   // Status history audit log
   fastify.get('/:id/history', { ...allRoles, ...tag }, (req: any, rep) => controller.getHistory(req, rep));
-}
+
 
 // ============================================================
 // WORKSHOP PATCH
@@ -129,3 +129,5 @@ export async function fixJobRoutes(fastify: FastifyInstance) {
       },
     });
   });
+
+}

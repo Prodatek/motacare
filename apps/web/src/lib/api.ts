@@ -361,15 +361,7 @@ export const fixJobApi = {
 export const workshopApi = {
   list:     (params?: { page?: number; limit?: number; city?: string; search?: string; featured?: boolean }) => {
     const query = new URLSearchParams(
-      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any,
-    ).toString();
-    return request<PaginatedResponse<Workshop>>(`/workshops${query ? `?${query}` : ''}`);
-  },
-  export const workshopApi = {
-  list: (params?: { page?: number; limit?: number; city?: string; search?: string; featured?: boolean }) => {
-    const query = new URLSearchParams(
-      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any,
-    ).toString();
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any, ).toString();
     return request<PaginatedResponse<Workshop>>(`/workshops${query ? `?${query}` : ''}`);
   },
  

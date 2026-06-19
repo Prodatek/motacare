@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import { fastify, type FastifyInstance } from 'fastify';
 import { InspectionController } from './inspection.controller';
 import { InspectionService } from './inspection.service';
 
@@ -93,7 +93,7 @@ export async function fixJobRoutes(fastify: FastifyInstance) {
   fastify.patch('/:id', { ...fixerOrAdmin,
     schema: { tags: ['Fix Jobs'], summary: 'Update fix job status, cost, or repair notes', security: [{ bearerAuth: [] }] } as any,
   }, (req, rep) => controller.updateFixJob(req as any, rep));
-}
+
 
 // This internal endpoint is called by workshop-service to
 // aggregate inspection counts per fixer over a date range.
@@ -144,3 +144,5 @@ export async function fixJobRoutes(fastify: FastifyInstance) {
  
     return reply.status(200).send({ statusCode: 200, data: { ...overall, byFixer } });
   });
+
+}
