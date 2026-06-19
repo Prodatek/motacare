@@ -136,10 +136,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const data = await response.json() as ApiResponse<T> & ApiError & { pagination?: unknown };
 
   if (!response.ok) {
-    const refreshed = await tryRefreshToken();
-    if (refreshed) return request<T>(path, options);
-    clearTokens();
-    window.location.href = '/login';
     throw new ApiClientError(
       data.statusCode ?? response.status,
       data.error ?? 'Error',
