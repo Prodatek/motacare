@@ -2,59 +2,96 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Car, ClipboardCheck, Shield, Zap, LogOut } from 'lucide-react';
+import {
+  Car, ClipboardCheck, Shield, Zap, LogOut, ArrowRight,
+  MapPin, Star, ChevronRight, Wrench, Users,
+} from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { workshopApi } from '@/lib/api';
-import type { Workshop } from '@/lib/api';
-import { MapPin, Star, ChevronRight } from 'lucide-react';
 
+// ============================================================
+// TYPES — inline to avoid any import chain issues
+// ============================================================
 
+interface Workshop {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  address: string;
+  city: string;
+  state: string;
+  specialties: string[];
+  currentFixerCount: number;
+  maxFixers: number;
+  featured: boolean;
+  totalInspections: number;
+  totalFixJobs: number;
+}
 
-function FeaturedWorkshopCard({ w }: { w: Workshop }) {
+// ============================================================
+// FEATURED WORKSHOP CARD
+// ============================================================
+
+function WorkshopCard({ w }: { w: Workshop }) {
   return (
     <div style={{
-      background: 'rgba(255,255,255,0.04)',
+      background: 'rgba(255,255,255,0.03)',
       border: '1px solid rgba(255,255,255,0.08)',
       borderRadius: 16,
-      padding: '1.25rem',
+      padding: '20px',
       display: 'flex',
       flexDirection: 'column',
-      gap: 12,
+      gap: 14,
+      transition: 'border-color 0.2s',
     }}>
-      {/* Header */}
+      {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{w.name}</h3>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{w.name}</span>
             {w.featured && (
-              <span style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', fontSize: 11, padding: '2px 7px', borderRadius: 999, fontWeight: 500 }}>
-                ★ Featured
-              </span>
+              <span style={{
+                background: 'rgba(251,191,36,0.15)',
+                color: '#fbbf24',
+                fontSize: 10,
+                padding: '2px 8px',
+                borderRadius: 999,
+                fontWeight: 600,
+                letterSpacing: '0.5px',
+              }}>★ FEATURED</span>
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-tertiary)', fontSize: 12 }}>
-            <MapPin style={{ width: 12, height: 12 }} />
+            <MapPin style={{ width: 11, height: 11 }} />
             {w.city}, {w.state}
           </div>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{w.currentFixerCount}/{w.maxFixers}</p>
+          <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+            {w.currentFixerCount}<span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>/{w.maxFixers}</span>
+          </p>
           <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>fixers</p>
         </div>
       </div>
- 
+
       {/* Description */}
       {w.description && (
-        <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>{w.description}</p>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55, margin: 0 }}>
+          {w.description.length > 100 ? `${w.description.slice(0, 100)}…` : w.description}
+        </p>
       )}
- 
+
       {/* Specialties */}
-      {w.specialties.length > 0 && (
+      {w.specialties?.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {w.specialties.slice(0, 4).map((s) => (
             <span key={s} style={{
-              background: 'rgba(239,68,68,0.1)', color: 'var(--brand-400)',
-              fontSize: 11, padding: '2px 8px', borderRadius: 6, fontWeight: 500,
+              background: 'rgba(239,68,68,0.1)',
+              color: 'var(--brand-400)',
+              fontSize: 11,
+              padding: '2px 8px',
+              borderRadius: 6,
+              fontWeight: 500,
             }}>{s}</span>
           ))}
           {w.specialties.length > 4 && (
@@ -62,204 +99,242 @@ function FeaturedWorkshopCard({ w }: { w: Workshop }) {
           )}
         </div>
       )}
- 
-      {/* Stats */}
-      <div style={{ display: 'flex', gap: 16, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12 }}>
-        {[
-          { label: 'Inspections', value: w.totalInspections },
-          { label: 'Fix Jobs',    value: w.totalFixJobs },
-        ].map(({ label, value }) => (
-          <div key={label}>
-            <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{value}</p>
-            <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>{label}</p>
-          </div>
-        ))}
+
+      {/* Stats footer */}
+      <div style={{
+        display: 'flex',
+        gap: 20,
+        paddingTop: 12,
+        borderTop: '1px solid rgba(255,255,255,0.06)',
+      }}>
+        <div>
+          <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{w.totalInspections}</p>
+          <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>Inspections</p>
+        </div>
+        <div>
+          <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{w.totalFixJobs}</p>
+          <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>Fix Jobs</p>
+        </div>
       </div>
     </div>
   );
 }
 
+// ============================================================
+// MAIN PAGE
+// ============================================================
+
 export default function HomePage() {
   const { isAuthenticated, isLoading, user, logout } = useAuth();
-
-  // Avoid hydration flicker
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
   const [featuredWorkshops, setFeaturedWorkshops] = useState<Workshop[]>([]);
-  
+  const [workshopsLoading, setWorkshopsLoading] = useState(true);
+  const [workshopsError, setWorkshopsError] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  // Load featured workshops — completely independent of auth.
+  // Uses a direct fetch to /api/workshops/featured so it works
+  // even if workshopApi is not imported into this file.
   useEffect(() => {
-    workshopApi.featured()
-      .then((r) => setFeaturedWorkshops(r?.data ?? []))
-      .catch(() => {}); // Landing page — fail silently
+    setWorkshopsLoading(true);
+    setWorkshopsError(false);
+
+    fetch('/api/workshops/featured')
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((body) => {
+        // The gateway returns { statusCode: 200, data: [...], pagination: {...} }
+        const workshops = body?.data ?? [];
+        setFeaturedWorkshops(Array.isArray(workshops) ? workshops : []);
+      })
+      .catch((err) => {
+        console.warn('[homepage] Could not load featured workshops:', err.message);
+        setWorkshopsError(true);
+        setFeaturedWorkshops([]);
+      })
+      .finally(() => setWorkshopsLoading(false));
   }, []);
 
   return (
-    <main className="min-h-screen bg-white">
+    <main style={{ minHeight: '100vh', position: 'relative', zIndex: 1 }}>
 
       {/* ── Nav ── */}
-      <nav className="border-b border-gray-100 px-6 py-4 sticky top-0 bg-white/95 backdrop-blur-sm z-10">
-        <div className="mx-auto max-w-6xl flex items-center justify-between">
-
-          {/* Logo — always links to dashboard if logged in, else stays on home */}
-          <Link
-            href={isAuthenticated ? '/dashboard' : '/'}
-            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-          >
-            <Car className="h-6 w-6 text-brand-600" />
-            <span className="text-xl font-bold text-gray-900">Motacare</span>
+      <nav style={{
+        borderBottom: '1px solid var(--surface-border)',
+        backdropFilter: 'blur(16px)',
+        background: 'rgba(13,15,20,0.88)',
+        position: 'sticky', top: 0, zIndex: 10,
+        padding: '0 24px',
+      }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
+          <Link href={isAuthenticated ? '/dashboard' : '/'} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+            <div style={{ width: 36, height: 36, background: 'linear-gradient(135deg,#ef4444,#b91c1c)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Car style={{ width: 18, height: 18, color: '#fff' }} />
+            </div>
+            <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.4px' }}>Motacare</span>
           </Link>
 
-          {/* Auth-aware nav buttons */}
           {mounted && !isLoading && (
-            <div className="flex items-center gap-3">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {isAuthenticated ? (
-                // ── Logged-in state ──
                 <>
-                  <div className="hidden sm:flex flex-col items-end mr-1">
-                    <span className="text-sm font-medium text-gray-900">
-                      {user?.firstName} {user?.lastName}
-                    </span>
-                    <span className="text-xs text-gray-400">{user?.role}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginRight: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{user?.firstName} {user?.lastName}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{user?.role}</span>
                   </div>
-                  <Link href="/dashboard" className="btn-primary text-sm">
-                    Go to Dashboard
-                  </Link>
-                  <button
-                    onClick={logout}
-                    className="btn-secondary text-sm flex items-center gap-1.5"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    <span className="hidden sm:inline">Sign out</span>
+                  <Link href="/dashboard" className="btn-primary">Go to Dashboard</Link>
+                  <button onClick={logout} className="btn-secondary" style={{ gap: 6 }}>
+                    <LogOut style={{ width: 15, height: 15 }} /> Sign out
                   </button>
                 </>
               ) : (
-                // ── Logged-out state ──
                 <>
-                  <Link href="/login" className="btn-secondary text-sm">
-                    Sign in
-                  </Link>
-                  <Link href="/register" className="btn-primary text-sm">
-                    Get started
-                  </Link>
+                  <Link href="/login" className="btn-secondary">Sign in</Link>
+                  <Link href="/register" className="btn-primary">Get started</Link>
                 </>
               )}
-            </div>
-          )}
-
-          {/* Loading skeleton */}
-          {mounted && isLoading && (
-            <div className="flex gap-3">
-              <div className="h-9 w-20 bg-gray-100 rounded-lg animate-pulse" />
-              <div className="h-9 w-28 bg-gray-100 rounded-lg animate-pulse" />
             </div>
           )}
         </div>
       </nav>
 
       {/* ── Hero ── */}
-      <section className="mx-auto max-w-6xl px-6 py-24 text-center">
-        <div className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 mb-6">
-          <Zap className="h-3 w-3" />
-          AI-Assisted Vehicle Diagnostics
-        </div>
-        <h1 className="text-5xl font-bold text-gray-900 leading-tight mb-6">
-          Professional car maintenance,
-          <br />
-          <span className="text-brand-600">fully documented.</span>
-        </h1>
-        <p className="text-xl text-gray-500 max-w-2xl mx-auto mb-10">
-          Motacare gives workshops and car owners a shared, transparent record of
-          every inspection and fix — no more word of mouth.
-        </p>
-
-        {mounted && (
-          <div className="flex items-center justify-center gap-4 flex-wrap">
-            {isAuthenticated ? (
-              <Link href="/dashboard" className="btn-primary px-8 py-3 text-base">
-                Go to your dashboard →
-              </Link>
-            ) : (
-              <>
-                <Link href="/register?role=OWNER" className="btn-primary px-8 py-3 text-base">
-                  Register your car
-                </Link>
-                <Link href="/register?role=FIXER" className="btn-secondary px-8 py-3 text-base">
-                  I&apos;m a workshop
-                </Link>
-              </>
-            )}
+      <section style={{ padding: '100px 24px 80px', textAlign: 'center', position: 'relative' }}>
+        <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: 600, height: 400, background: 'radial-gradient(ellipse, rgba(220,38,38,0.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ maxWidth: 760, margin: '0 auto', position: 'relative' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 999, padding: '4px 14px', marginBottom: 24 }}>
+            <Zap style={{ width: 13, height: 13, color: 'var(--brand-400)' }} />
+            <span style={{ fontSize: 12, color: 'var(--brand-400)', fontWeight: 500 }}>AI-Assisted Vehicle Diagnostics</span>
           </div>
-        )}
+
+          <h1 style={{ fontSize: 52, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.1, letterSpacing: '-1px', marginBottom: 20 }}>
+            Professional car maintenance,<br />
+            <span style={{ color: 'var(--brand-500)' }}>fully documented.</span>
+          </h1>
+
+          <p style={{ fontSize: 18, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 36, maxWidth: 520, margin: '0 auto 36px' }}>
+            Motacare gives workshops and car owners a shared, transparent record of every inspection and fix — no more word of mouth.
+          </p>
+
+          {mounted && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+              {isAuthenticated ? (
+                <Link href="/dashboard" className="btn-primary" style={{ height: 46, padding: '0 28px', fontSize: 15 }}>
+                  Go to Dashboard <ArrowRight style={{ width: 16, height: 16 }} />
+                </Link>
+              ) : (
+                <>
+                  <Link href="/register?role=OWNER" className="btn-primary" style={{ height: 46, padding: '0 28px', fontSize: 15 }}>
+                    Register your car <ArrowRight style={{ width: 16, height: 16 }} />
+                  </Link>
+                  <Link href="/register?role=FIXER" className="btn-secondary" style={{ height: 46, padding: '0 28px', fontSize: 15 }}>
+                    I'm a workshop
+                  </Link>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </section>
 
-      {/* ── Features ── */}
-      <section className="bg-gray-50 py-20">
-        <div className="mx-auto max-w-6xl px-6">
-          <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
-            How Motacare works
-          </h2>
-          <div className="grid md:grid-cols-3 gap-8">
+      {/* ── How it works ── */}
+      <section style={{ padding: '60px 24px 80px' }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+          <h2 style={{ fontSize: 30, textAlign: 'center', marginBottom: 48, color: 'var(--text-primary)' }}>How Motacare works</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
             {[
-              {
-                icon: <Car className="h-6 w-6 text-brand-600" />,
-                title: 'Register your vehicle',
-                description:
-                  'Every car gets a unique identity hash — a secure link between vehicle and owner that never changes.',
-              },
-              {
-                icon: <ClipboardCheck className="h-6 w-6 text-brand-600" />,
-                title: 'AI-guided inspection',
-                description:
-                  'Fixers work through an intelligent checklist covering 44 checks across 8 systems. Every finding is recorded with notes.',
-              },
-              {
-                icon: <Shield className="h-6 w-6 text-brand-600" />,
-                title: 'Full history, forever',
-                description:
-                  'Owners receive documented reports for every visit. Your car\'s full maintenance history, always accessible.',
-              },
+              { icon: <Car style={{ width: 22, height: 22 }} />, colour: 'brand', title: 'Register your vehicle', body: 'Every car gets a unique identity hash — a secure link between vehicle and owner that never changes.' },
+              { icon: <ClipboardCheck style={{ width: 22, height: 22 }} />, colour: 'green', title: 'AI-guided inspection', body: 'Fixers work through an intelligent 44-point checklist. Every finding is recorded with photos and notes.' },
+              { icon: <Shield style={{ width: 22, height: 22 }} />, colour: 'purple', title: 'Full history, forever', body: "Owners receive documented reports for every visit. Your car's full maintenance history, always accessible." },
             ].map((f) => (
-              <div key={f.title} className="card p-6">
-                <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50">
-                  {f.icon}
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{f.title}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{f.description}</p>
+              <div key={f.title} className="card" style={{ padding: '24px' }}>
+                <div className={`icon-box ${f.colour}`} style={{ marginBottom: 16 }}>{f.icon}</div>
+                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>{f.title}</h3>
+                <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{f.body}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {featuredWorkshops.length > 0 && (
-        <section style={{ background: 'rgba(255,255,255,0.02)', padding: '80px 24px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32, flexWrap: 'wrap', gap: 12 }}>
-              <div>
-                <h2 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 6px' }}>
-                  Featured Workshops
-                </h2>
-                <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>
-                  Trusted workshops using Motacare to deliver transparent, documented service
-                </p>
-              </div>
-              <Link href="/workshops" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--brand-400)', textDecoration: 'none', fontWeight: 500 }}>
-                View all workshops <ChevronRight style={{ width: 15, height: 15 }} />
-              </Link>
+      {/* ── Featured Workshops ── */}
+      {/* Always renders the section shell — shows skeleton while loading,
+          hides gracefully if empty or errored */}
+      <section style={{
+        padding: '60px 24px 80px',
+        background: 'rgba(255,255,255,0.015)',
+        borderTop: '1px solid rgba(255,255,255,0.05)',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+      }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+
+          {/* Section header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32, flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <h2 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 6px' }}>
+                Featured Workshops
+              </h2>
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>
+                Trusted workshops using Motacare to deliver transparent, documented service
+              </p>
             </div>
- 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
-              {featuredWorkshops.map((w) => (
-                <FeaturedWorkshopCard key={w.id} w={w} />
+            <Link href="/workshops" style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              fontSize: 14, color: 'var(--brand-400)',
+              textDecoration: 'none', fontWeight: 500,
+            }}>
+              View all <ChevronRight style={{ width: 15, height: 15 }} />
+            </Link>
+          </div>
+
+          {/* Loading skeleton */}
+          {workshopsLoading && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+              {[1, 2, 3].map((i) => (
+                <div key={i} style={{
+                  height: 200, borderRadius: 16,
+                  background: 'rgba(255,255,255,0.04)',
+                  animation: 'pulse 1.5s ease-in-out infinite',
+                }} />
               ))}
             </div>
-          </div>
-        </section>
-      )}
+          )}
+
+          {/* Error state — fail silently, show nothing */}
+          {!workshopsLoading && workshopsError && (
+            <p style={{ color: 'var(--text-tertiary)', fontSize: 14, textAlign: 'center', padding: '40px 0' }}>
+              Workshops unavailable right now — check back soon.
+            </p>
+          )}
+
+          {/* Empty state */}
+          {!workshopsLoading && !workshopsError && featuredWorkshops.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <Wrench style={{ width: 40, height: 40, color: 'var(--text-tertiary)', margin: '0 auto 12px' }} />
+              <p style={{ color: 'var(--text-tertiary)', fontSize: 14 }}>
+                No featured workshops yet — be the first to{' '}
+                <Link href="/register?role=FIXER" style={{ color: 'var(--brand-400)' }}>create one</Link>.
+              </p>
+            </div>
+          )}
+
+          {/* Workshop grid */}
+          {!workshopsLoading && !workshopsError && featuredWorkshops.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+              {featuredWorkshops.map((w) => (
+                <WorkshopCard key={w.id} w={w} />
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-gray-100 py-8 text-center text-sm text-gray-400">
-        <p>© {new Date().getFullYear()} Motacare by Prodatek. All rights reserved.</p>
+      <footer style={{ borderTop: '1px solid var(--surface-border)', padding: '24px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
+        © {new Date().getFullYear()} Motacare by Prodatek. All rights reserved.
       </footer>
     </main>
   );
