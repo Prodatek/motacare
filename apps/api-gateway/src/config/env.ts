@@ -11,33 +11,32 @@ import { z } from 'zod';
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'staging', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(3000),
-
-  // JWT secret — must match auth-service exactly
-  // The gateway verifies tokens on certain routes before proxying
+ 
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
-
-  // Downstream service URLs — internal Docker network in staging/prod
-  AUTH_SERVICE_URL: z.string().url().default('http://localhost:3001'),
-  VEHICLE_SERVICE_URL: z.string().url().default('http://localhost:3002'),
-  INSPECTION_SERVICE_URL: z.string().url().default('http://localhost:3003'),
-  FIX_JOBS_SERVICE_URL: z.string().url().default('http://localhost:3004'),
+ 
+  // ── Downstream service URLs ──────────────────────────────
+  AUTH_SERVICE_URL:         z.string().url().default('http://localhost:3001'),
+  VEHICLE_SERVICE_URL:      z.string().url().default('http://localhost:3002'),
+  INSPECTION_SERVICE_URL:   z.string().url().default('http://localhost:3003'),
+  FIX_JOBS_SERVICE_URL:     z.string().url().default('http://localhost:3004'),
+  ALERT_SERVICE_URL:        z.string().url().default('http://localhost:3005'),
   SUBSCRIPTION_SERVICE_URL: z.string().url().default('http://localhost:3007'),
-  WORKSHOP_SERVICE_URL: z.string().url().default('http://localhost:3008'),
-
-  // CORS — comma-separated allowed origins in production
+  WORKSHOP_SERVICE_URL:     z.string().url().default('http://localhost:3008'),
+ 
+  // ── CORS ────────────────────────────────────────────────
   ALLOWED_ORIGINS: z.string().default('http://localhost:3005'),
-
-  // Request timeout — how long to wait for a downstream response (ms)
+ 
+  // ── Request timeout (ms) ────────────────────────────────
   PROXY_TIMEOUT_MS: z.coerce.number().default(30000),
 });
-
+ 
 const parsed = envSchema.safeParse(process.env);
-
+ 
 if (!parsed.success) {
   console.error('❌ Invalid environment variables:');
   console.error(parsed.error.flatten().fieldErrors);
   process.exit(1);
 }
-
+ 
 export const env = parsed.data;
 export type Env = typeof env;
