@@ -491,24 +491,34 @@ export default function WorkshopPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const load = async () => {
-    if (!user) return;
-    setIsLoading(true);
-    try {
-      // If the JWT has a workshopId, load that workshop
-      const workshopId = (user as any).workshopId;
-      if (workshopId) {
+  if (!user) return;
+  setIsLoading(true);
+ 
+  try {
+    const workshopId = (user as any).workshopId as string | undefined | null;
+ 
+    if (workshopId) {
+      // Fixer already belongs to a workshop — load it
+      try {
         const w = await workshopApi.get(workshopId);
         setWorkshop(w);
         setMembershipStatus('approved');
-      } else {
+      } catch (err) {
+        // Workshop-service unreachable, DB not migrated, or record deleted.
+        // Degrade gracefully — show the join form instead of a crash.
+        console.warn('[workshop] Could not load workshop', workshopId, err);
         setMembershipStatus('none');
+        setWorkshop(null);
       }
-    } catch {
+    } else {
+      // No workshop yet — show join/create form
       setMembershipStatus('none');
-    } finally {
-      setIsLoading(false);
+      setWorkshop(null);
     }
-  };
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   useEffect(() => { load(); }, [user]);
 
