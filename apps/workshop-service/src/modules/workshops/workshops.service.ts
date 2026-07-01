@@ -31,6 +31,29 @@ const COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12 hours
 // HELPERS
 // ============================================================
 
+interface AuthUserProfile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+}
+
+interface WorkshopStatsPayload {
+  data?: {
+    total?: number;
+    completed?: number;
+    delivered?: number;
+    totalRevenue?: number;
+    byFixer?: Record<string, {
+      total?: number;
+      completed?: number;
+      revenue?: number;
+      avgDurationHours?: number | null;
+    }>;
+    trend?: unknown[];
+  } | null;
+}
+
 function toSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
@@ -66,14 +89,15 @@ async function updateUserRole(userId: string, role: 'FIXER' | 'WORKSHOP_ADMIN', 
   }
 }
 
-async function getFixerProfile(fixerId: string) {
+async function getFixerProfile(fixerId: string): Promise<AuthUserProfile | null> {
   try {
     const res = await fetch(`${env.AUTH_SERVICE_URL}/auth/internal/user-by-id`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: fixerId }),
     });
     if (!res.ok) return null;
-    return ((await res.json()) as { data: any }).data;
+    const payload = (await res.json()) as { data?: AuthUserProfile | null };
+    return payload.data ?? null;
   } catch { return null; }
 }
 
@@ -171,7 +195,9 @@ export class WorkshopService {
     const { offset, limit, page } = parsePagination(query);
 
     // All ACTIVE workshops are always visible — no auth gate
-    const conditions: any[] = [eq(workshops.status, 'ACTIVE')];
+    const conditions: Array<ReturnType<typeof eq> | ReturnType<typeof ilike> | ReturnType<typeof or>> = [
+      eq(workshops.status, 'ACTIVE'),
+    ];
 
     if (query.city)     conditions.push(ilike(workshops.city, `%${query.city}%`));
     if (query.featured) conditions.push(eq(workshops.featured, true));
@@ -436,12 +462,18 @@ export class WorkshopService {
       }).then((r) => r.json()),
     ]);
 
-    const inspData = inspectionStats.status === 'fulfilled' ? (inspectionStats.value as any).data : null;
-    const fixData  = fixJobStats.status === 'fulfilled'     ? (fixJobStats.value as any).data  : null;
+    const inspData = inspectionStats.status === 'fulfilled'
+      ? (inspectionStats.value as WorkshopStatsPayload).data
+      : null;
+    const fixData = fixJobStats.status === 'fulfilled'
+      ? (fixJobStats.value as WorkshopStatsPayload).data
+      : null;
 
     const fixerProfiles = await Promise.all(fixerIds.map(getFixerProfile));
     const fixerMap = Object.fromEntries(
-      fixerProfiles.filter(Boolean).map((f: any) => [f.id, `${f.firstName} ${f.lastName}`]),
+      fixerProfiles
+        .filter((f): f is AuthUserProfile => f !== null)
+        .map((f) => [f.id, `${f.firstName} ${f.lastName}`]),
     );
 
     return {
@@ -471,6 +503,6 @@ export class WorkshopService {
       with: { workshop: true },
     });
     if (!member) return null;
-    return { workshopId: member.workshopId, workshopName: (member as any).workshop?.name ?? '' };
+    return { workshopId: member.workshopId, workshopName: member.workshop?.name ?? '' };
   }
 }
