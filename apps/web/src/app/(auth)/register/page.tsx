@@ -1,175 +1,182 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Car, Wrench, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Car, Loader2, Eye, EyeOff, Wrench, User } from 'lucide-react';
 import { toast } from 'sonner';
+import { authApi, setAccessToken, saveRefreshToken, ApiClientError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { ApiClientError } from '@/lib/api';
+import { cn } from '@/lib/utils';
+ 
 
-const registerSchema = z.object({
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
-  email: z.string().email('Enter a valid email address'),
-  phone: z.string().optional(),
-  password: z.string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[A-Z]/, 'Must contain an uppercase letter')
-    .regex(/[0-9]/, 'Must contain a number'),
-  role: z.enum(['OWNER', 'FIXER']),
-  workshopName: z.string().optional(),
-  workshopAddress: z.string().optional(),
-}).refine((d) => d.role !== 'FIXER' || !!d.workshopName, {
-  message: 'Workshop name is required for fixer accounts',
-  path: ['workshopName'],
-});
 
-type RegisterForm = z.infer<typeof registerSchema>;
-
+type Role = 'OWNER' | 'FIXER';
+ 
 export default function RegisterPage() {
-  const { register: registerUser, isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const defaultRole = (searchParams.get('role') as 'OWNER' | 'FIXER') ?? 'OWNER';
-  const [showPassword, setShowPassword] = useState(false);
-
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.push('/dashboard');
-    }
-  }, [isAuthenticated, isLoading, router]);
-
-  const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } =
-    useForm<RegisterForm>({
-      resolver: zodResolver(registerSchema),
-      defaultValues: { role: defaultRole },
-    });
-
-  const selectedRole = watch('role');
-
-  const onSubmit = async (data: RegisterForm) => {
+  const { setUser } = useAuth() as any;
+  const router      = useRouter();
+  const params      = useSearchParams();
+ 
+  const [role, setRole]           = useState<Role>((params.get('role') as Role) ?? 'OWNER');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName]   = useState('');
+  const [email, setEmail]         = useState('');
+  const [password, setPassword]   = useState('');
+  const [showPw, setShowPw]       = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+ 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
     try {
-      await registerUser(data);
-      document.cookie = 'mc_session=1; path=/; max-age=604800; SameSite=Lax';
+      const result = await authApi.register({ email, password, firstName, lastName, role });
+      setAccessToken(result.tokens.accessToken);
+      saveRefreshToken(result.tokens.refreshToken);
+      if (setUser) setUser(result.user);
+      toast.success(`Welcome to Motacare, ${firstName}!`);
       router.push('/dashboard');
     } catch (error) {
       if (error instanceof ApiClientError) {
         toast.error(error.message);
       } else {
-        toast.error('Something went wrong. Please try again.');
+        toast.error('Registration failed — please try again');
       }
+    } finally {
+      setIsLoading(false);
     }
   };
-
+ 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <Car className="h-7 w-7 text-brand-600" />
-          <span className="text-2xl font-bold text-gray-900">Motacare</span>
+    <main style={{
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px',
+      background: 'var(--surface-bg)',
+    }}>
+ 
+      {/* ── Logo — links back to homepage ── */}
+      <Link href="/" style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        textDecoration: 'none', marginBottom: 32,
+      }}>
+        <div style={{
+          width: 40, height: 40,
+          background: 'linear-gradient(135deg,#ef4444,#b91c1c)',
+          borderRadius: 12,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Car style={{ width: 20, height: 20, color: '#fff' }} />
         </div>
-
-        <div className="card p-8">
-          <h1 className="text-xl font-semibold text-gray-900 mb-1">Create your account</h1>
-          <p className="text-sm text-gray-500 mb-6">Free to get started</p>
-
-          {/* Role Selector */}
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            {(['OWNER', 'FIXER'] as const).map((role) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => setValue('role', role)}
-                className={`flex items-center gap-2 rounded-lg border p-3 text-sm font-medium transition-all ${
-                  selectedRole === role
-                    ? 'border-brand-600 bg-brand-50 text-brand-700'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                }`}
-              >
-                {role === 'OWNER'
-                  ? <Car className="h-4 w-4 shrink-0" />
-                  : <Wrench className="h-4 w-4 shrink-0" />}
-                {role === 'OWNER' ? 'Car Owner' : 'Workshop / Fixer'}
-              </button>
-            ))}
-          </div>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">First name</label>
-                <input {...register('firstName')} className="input" placeholder="John" />
-                {errors.firstName && <p className="mt-1 text-xs text-red-600">{errors.firstName.message}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Last name</label>
-                <input {...register('lastName')} className="input" placeholder="Doe" />
-                {errors.lastName && <p className="mt-1 text-xs text-red-600">{errors.lastName.message}</p>}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email address</label>
-              <input {...register('email')} type="email" className="input" placeholder="you@example.com" />
-              {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone (optional)</label>
-              <input {...register('phone')} type="tel" className="input" placeholder="+234 800 000 0000" />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <div className="relative">
-                <input
-                  {...register('password')}
-                  type={showPassword ? 'text' : 'password'}
-                  className="input pr-10"
-                  placeholder="Min. 8 chars, 1 uppercase, 1 number"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((p) => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>}
-            </div>
-
-            {/* Fixer-only fields */}
-            {selectedRole === 'FIXER' && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Workshop name</label>
-                  <input {...register('workshopName')} className="input" placeholder="e.g. Ade Motors" />
-                  {errors.workshopName && <p className="mt-1 text-xs text-red-600">{errors.workshopName.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Workshop address (optional)</label>
-                  <input {...register('workshopAddress')} className="input" placeholder="12 Bode Thomas St, Lagos" />
-                </div>
-              </>
-            )}
-
-            <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-2.5">
-              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isSubmitting ? 'Creating account…' : 'Create account'}
+        <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
+          Motacare
+        </span>
+      </Link>
+ 
+      {/* ── Card ── */}
+      <div className="card" style={{ width: '100%', maxWidth: 440, padding: '36px 32px' }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>
+          Create your account
+        </h1>
+        <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 24px' }}>
+          Join Motacare — it&apos;s free to get started
+        </p>
+ 
+        {/* ── Role selector ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 24 }}>
+          {([
+            { value: 'OWNER', label: 'Car Owner', sub: 'Track my vehicles', icon: <User style={{ width: 18, height: 18 }} /> },
+            { value: 'FIXER', label: 'Workshop / Fixer', sub: 'Manage inspections', icon: <Wrench style={{ width: 18, height: 18 }} /> },
+          ] as const).map((r) => (
+            <button
+              key={r.value}
+              type="button"
+              onClick={() => setRole(r.value)}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                gap: 4, padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+                border: role === r.value ? '2px solid var(--brand-500)' : '1px solid var(--surface-border)',
+                background: role === r.value ? 'rgba(239,68,68,0.08)' : 'var(--surface-card)',
+                transition: 'all 0.15s',
+              }}
+            >
+              <div style={{ color: role === r.value ? 'var(--brand-400)' : 'var(--text-tertiary)' }}>{r.icon}</div>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{r.label}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{r.sub}</span>
             </button>
-          </form>
+          ))}
         </div>
-
-        <p className="text-center text-sm text-gray-500 mt-6">
+ 
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>First name</label>
+              <input value={firstName} onChange={(e) => setFirstName(e.target.value)}
+                placeholder="Adebayo" required className="input" />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>Last name</label>
+              <input value={lastName} onChange={(e) => setLastName(e.target.value)}
+                placeholder="Okafor" required className="input" />
+            </div>
+          </div>
+ 
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>Email address</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com" required autoComplete="email" className="input" />
+          </div>
+ 
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>Password</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPw ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Min. 8 characters, one uppercase, one number"
+                required minLength={8}
+                autoComplete="new-password"
+                className="input"
+                style={{ paddingRight: 40 }}
+              />
+              <button type="button" onClick={() => setShowPw((p) => !p)} style={{
+                position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-tertiary)', padding: 0, display: 'flex',
+              }}>
+                {showPw ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
+              </button>
+            </div>
+          </div>
+ 
+          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>
+            By creating an account you agree to our{' '}
+            <Link href="/terms" style={{ color: 'var(--brand-400)', textDecoration: 'none' }}>Terms</Link> and{' '}
+            <Link href="/privacy" style={{ color: 'var(--brand-400)', textDecoration: 'none' }}>Privacy Policy</Link>.
+          </p>
+ 
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="btn-primary"
+            style={{ marginTop: 4, height: 44, fontSize: 15, justifyContent: 'center' }}
+          >
+            {isLoading && <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} />}
+            {isLoading ? 'Creating account…' : 'Create account'}
+          </button>
+        </form>
+ 
+        <p style={{ margin: '20px 0 0', textAlign: 'center', fontSize: 14, color: 'var(--text-secondary)' }}>
           Already have an account?{' '}
-          <Link href="/login" className="text-brand-600 font-medium hover:underline">Sign in</Link>
+          <Link href="/login" style={{ color: 'var(--brand-400)', fontWeight: 500, textDecoration: 'none' }}>
+            Sign in
+          </Link>
         </p>
       </div>
-    </div>
+    </main>
   );
 }

@@ -62,7 +62,7 @@ export class VehicleController {
       const { sub: requesterId, role } = request.user as { sub: string; role: string };
 
       let result;
-      if (role === 'FIXER' || role === 'ADMIN') {
+      if (role === 'FIXER' || role === 'WORKSHOP_ADMIN' || role === 'ADMIN') {
         // Fixers can search all vehicles
         result = await this.vehicleService.searchVehicles(parsed.data);
       } else {

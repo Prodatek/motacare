@@ -1,126 +1,146 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Car, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Car, Loader2, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
+import { authApi, setAccessToken, saveRefreshToken, ApiClientError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { ApiClientError } from '@/lib/api';
-
-const loginSchema = z.object({
-  email: z.string().email('Enter a valid email address'),
-  password: z.string().min(1, 'Password is required'),
-});
-
-type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const { login, isAuthenticated, isLoading } = useAuth();
+  const { setUser } = useAuth() as any;
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const from = searchParams.get('from') ?? '/dashboard';
-  const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.push('/dashboard');
-    }
-  }, [isAuthenticated, isLoading, router]);
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw, setShowPw]     = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema),
-  });
-
-  const onSubmit = async (data: LoginForm) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
     try {
-      await login(data.email, data.password);
-      // Set session cookie so middleware knows user is logged in
-      document.cookie = 'mc_session=1; path=/; max-age=604800; SameSite=Lax';
-      router.push(from);
+      const result = await authApi.login(email, password);
+      setAccessToken(result.tokens.accessToken);
+      saveRefreshToken(result.tokens.refreshToken);
+      if (setUser) setUser(result.user);
+      router.push('/dashboard');
     } catch (error) {
       if (error instanceof ApiClientError) {
         toast.error(error.message);
       } else {
-        toast.error('Something went wrong. Please try again.');
+        toast.error('Login failed — please try again');
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <Car className="h-7 w-7 text-brand-600" />
-          <span className="text-2xl font-bold text-gray-900">Motacare</span>
+    <main style={{
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px',
+      background: 'var(--surface-bg)',
+    }}>
+
+      {/* ── Logo — always navigates back to homepage ── */}
+      <Link href="/" style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        textDecoration: 'none', marginBottom: 32,
+      }}>
+        <div style={{
+          width: 40, height: 40,
+          background: 'linear-gradient(135deg,#ef4444,#b91c1c)',
+          borderRadius: 12,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Car style={{ width: 20, height: 20, color: '#fff' }} />
         </div>
+        <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
+          Motacare
+        </span>
+      </Link>
 
-        <div className="card p-8">
-          <h1 className="text-xl font-semibold text-gray-900 mb-1">Welcome back</h1>
-          <p className="text-sm text-gray-500 mb-6">Sign in to your account</p>
+      {/* ── Card ── */}
+      <div className="card" style={{ width: '100%', maxWidth: 400, padding: '36px 32px' }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>
+          Welcome back
+        </h1>
+        <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 28px' }}>
+          Sign in to your Motacare account
+        </p>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email address
-              </label>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>
+              Email address
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              autoComplete="email"
+              className="input"
+            />
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>Password</label>
+              <Link href="/forgot-password" style={{ fontSize: 12, color: 'var(--brand-400)', textDecoration: 'none' }}>
+                Forgot password?
+              </Link>
+            </div>
+            <div style={{ position: 'relative' }}>
               <input
-                {...register('email')}
-                type="email"
-                autoComplete="email"
-                placeholder="you@example.com"
+                type={showPw ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                autoComplete="current-password"
                 className="input"
+                style={{ paddingRight: 40 }}
               />
-              {errors.email && (
-                <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>
-              )}
+              <button
+                type="button"
+                onClick={() => setShowPw((p) => !p)}
+                style={{
+                  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--text-tertiary)', padding: 0, display: 'flex',
+                }}
+              >
+                {showPw ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
+              </button>
             </div>
+          </div>
 
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  {...register('password')}
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  className="input pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((p) => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {errors.password && (
-                <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>
-              )}
-            </div>
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="btn-primary"
+            style={{ marginTop: 4, height: 44, fontSize: 15, justifyContent: 'center' }}
+          >
+            {isLoading && <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} />}
+            {isLoading ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
 
-            <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-2.5">
-              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {isSubmitting ? 'Signing in…' : 'Sign in'}
-            </button>
-          </form>
-        </div>
-
-        <p className="text-center text-sm text-gray-500 mt-6">
+        <p style={{ margin: '20px 0 0', textAlign: 'center', fontSize: 14, color: 'var(--text-secondary)' }}>
           Don&apos;t have an account?{' '}
-          <Link href="/register" className="text-brand-600 font-medium hover:underline">
-            Get started free
+          <Link href="/register" style={{ color: 'var(--brand-400)', fontWeight: 500, textDecoration: 'none' }}>
+            Create one
           </Link>
         </p>
       </div>
-    </div>
+    </main>
   );
 }
