@@ -9,7 +9,7 @@ import {
 import { useAuth } from '@/lib/auth';
 
 // ============================================================
-// TYPES — inline to avoid any import chain issues
+// TYPES
 // ============================================================
 
 interface Workshop {
@@ -26,7 +26,54 @@ interface Workshop {
   featured: boolean;
   totalInspections: number;
   totalFixJobs: number;
+  // hardcoded-only fields
+  _hardcoded?: true;
+  _tagline?: string;
+  _badge?: string;
 }
+
+// ============================================================
+// HARDCODED SHOWCASE WORKSHOPS
+// These three always appear first — they represent the product
+// promise before real workshops accumulate.
+// Real registered workshops fill the remaining slots below them.
+// ============================================================
+
+const HARDCODED_WORKSHOPS: Workshop[] = [
+  {
+    id: '__hc_1__',
+    name: 'Prodatek Auto Centre',
+    slug: 'prodatek-auto-centre',
+    description: 'Lagos\'s premier AI-documented workshop. Every inspection fully transparent — owners get digital reports in minutes.',
+    address: '14 Admiralty Way', city: 'Lagos', state: 'Lagos State',
+    specialties: ['Engine', 'Electrical', 'Diagnostics', 'AC & Cooling'],
+    currentFixerCount: 5, maxFixers: 5,
+    featured: true, totalInspections: 340, totalFixJobs: 218,
+    _hardcoded: true, _badge: 'Founding Workshop',
+  },
+  {
+    id: '__hc_2__',
+    name: 'Abuja Precision Garage',
+    slug: 'abuja-precision-garage',
+    description: 'Specialists in German and Japanese vehicles. Certified fixers, live job tracking for every customer.',
+    address: '3 Gwarimpa Estate', city: 'Abuja', state: 'FCT',
+    specialties: ['Transmission', 'Brakes', 'Suspension', 'Tyres'],
+    currentFixerCount: 4, maxFixers: 5,
+    featured: true, totalInspections: 190, totalFixJobs: 142,
+    _hardcoded: true, _badge: 'Top Rated',
+  },
+  {
+    id: '__hc_3__',
+    name: 'Swift Fix Ibadan',
+    slug: 'swift-fix-ibadan',
+    description: 'Fast turnaround, fair pricing. Serving Ibadan car owners with full digital maintenance records since 2024.',
+    address: '22 Ring Road', city: 'Ibadan', state: 'Oyo State',
+    specialties: ['Engine', 'Fluids', 'Brakes', 'Body & Paint'],
+    currentFixerCount: 3, maxFixers: 5,
+    featured: false, totalInspections: 115, totalFixJobs: 88,
+    _hardcoded: true,
+  },
+];
 
 // ============================================================
 // FEATURED WORKSHOP CARD
@@ -36,31 +83,42 @@ function WorkshopCard({ w }: { w: Workshop }) {
   return (
     <div style={{
       background: 'rgba(255,255,255,0.03)',
-      border: '1px solid rgba(255,255,255,0.08)',
+      border: w._hardcoded
+        ? '1px solid rgba(239,68,68,0.2)'
+        : '1px solid rgba(255,255,255,0.08)',
       borderRadius: 16,
       padding: '20px',
       display: 'flex',
       flexDirection: 'column',
       gap: 14,
-      transition: 'border-color 0.2s',
+      position: 'relative',
     }}>
-      {/* Header row */}
+      {/* Badge — hardcoded cards get a coloured tag, registered get "Verified" */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        {(w._badge || w._hardcoded) && (
+          <span style={{
+            background: w._badge === 'Top Rated'
+              ? 'rgba(251,191,36,0.15)' : 'rgba(239,68,68,0.12)',
+            color: w._badge === 'Top Rated' ? '#fbbf24' : 'var(--brand-400)',
+            fontSize: 10, padding: '3px 8px', borderRadius: 999,
+            fontWeight: 600, letterSpacing: '0.4px',
+          }}>
+            {w._badge ?? '★ SHOWCASE'}
+          </span>
+        )}
+        {!w._hardcoded && (
+          <span style={{
+            background: 'rgba(34,197,94,0.12)', color: '#4ade80',
+            fontSize: 10, padding: '3px 8px', borderRadius: 999,
+            fontWeight: 600, letterSpacing: '0.4px',
+          }}>✓ VERIFIED</span>
+        )}
+      </div>
+
+      {/* Name + location row */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{w.name}</span>
-            {w.featured && (
-              <span style={{
-                background: 'rgba(251,191,36,0.15)',
-                color: '#fbbf24',
-                fontSize: 10,
-                padding: '2px 8px',
-                borderRadius: 999,
-                fontWeight: 600,
-                letterSpacing: '0.5px',
-              }}>★ FEATURED</span>
-            )}
-          </div>
+          <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px' }}>{w.name}</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-tertiary)', fontSize: 12 }}>
             <MapPin style={{ width: 11, height: 11 }} />
             {w.city}, {w.state}
@@ -73,13 +131,9 @@ function WorkshopCard({ w }: { w: Workshop }) {
           <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>fixers</p>
         </div>
       </div>
-
-      {/* Description */}
-      {w.description && (
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55, margin: 0 }}>
           {w.description.length > 100 ? `${w.description.slice(0, 100)}…` : w.description}
         </p>
-      )}
 
       {/* Specialties */}
       {w.specialties?.length > 0 && (
