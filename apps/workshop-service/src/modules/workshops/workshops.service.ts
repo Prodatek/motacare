@@ -224,6 +224,119 @@ export class WorkshopService {
     return { data: rows, pagination: buildPaginationMeta(Number(total), page, limit) };
   }
 
+
+
+    // GET FEATURED WORKSHOPS (public — landing page)
+  // Returns hardcoded seeds + dynamically fetched real workshops
+  // ----------------------------------------------------------
+  async getFeaturedWorkshops(): Promise<Array<Partial<Workshop> & { isSeeded?: boolean }>> {
+ 
+    // ── 3 hardcoded seed companies ───────────────────────────
+    // These are always shown, represent the kind of workshops
+    // on the platform, and never disappear even if DB is empty.
+    const seeds = [
+      {
+        id:                 'seed-1',
+        name:               'Ade Motors & Auto Works',
+        slug:               'ade-motors',
+        description:        'Lagos Island\'s most trusted workshop for Japanese and Korean vehicles. 10+ years keeping cars on the road.',
+        address:            '14 Bode Thomas Street',
+        city:               'Lagos',
+        state:              'Lagos State',
+        phone:              '+234 801 234 5678',
+        email:              'info@ademotors.ng',
+        specialties:        ['Engine', 'Brakes', 'Diagnostics', 'AC & Cooling'],
+        status:             'ACTIVE' as const,
+        adminId:            'seed',
+        maxFixers:          5,
+        currentFixerCount:  4,
+        featured:           true,
+        totalInspections:   312,
+        totalFixJobs:       289,
+        logoUrl:            null,
+        coverImageUrl:      null,
+        createdAt:          new Date('2023-01-15').toISOString(),
+        updatedAt:          new Date().toISOString(),
+        isSeeded:           true,
+      },
+      {
+        id:                 'seed-2',
+        name:               'Prodatek Auto Care',
+        slug:               'prodatek-auto-care',
+        description:        'Full-service workshop specialising in European vehicles and advanced electrical diagnostics across Abuja.',
+        address:            '7 Gimbiya Street, Garki 2',
+        city:               'Abuja',
+        state:              'FCT',
+        phone:              '+234 802 345 6789',
+        email:              'hello@prodatekauto.ng',
+        specialties:        ['Electrical', 'Transmission', 'Diagnostics', 'Suspension'],
+        status:             'ACTIVE' as const,
+        adminId:            'seed',
+        maxFixers:          5,
+        currentFixerCount:  3,
+        featured:           true,
+        totalInspections:   198,
+        totalFixJobs:       175,
+        logoUrl:            null,
+        coverImageUrl:      null,
+        createdAt:          new Date('2023-03-10').toISOString(),
+        updatedAt:          new Date().toISOString(),
+        isSeeded:           true,
+      },
+      {
+        id:                 'seed-3',
+        name:               'SpeedFix Workshop',
+        slug:               'speedfix-workshop',
+        description:        'Port Harcourt\'s go-to workshop for tyres, brakes, and fast-turnaround oil changes. Open 7 days a week.',
+        address:            '23 Aggrey Road, Diobu',
+        city:               'Port Harcourt',
+        state:              'Rivers State',
+        phone:              '+234 803 456 7890',
+        email:              'speedfix@email.com',
+        specialties:        ['Tyres', 'Brakes', 'Fluids', 'Body & Paint'],
+        status:             'ACTIVE' as const,
+        adminId:            'seed',
+        maxFixers:          5,
+        currentFixerCount:  5,
+        featured:           true,
+        totalInspections:   445,
+        totalFixJobs:       391,
+        logoUrl:            null,
+        coverImageUrl:      null,
+        createdAt:          new Date('2022-11-20').toISOString(),
+        updatedAt:          new Date().toISOString(),
+        isSeeded:           true,
+      },
+    ];
+ 
+    // ── Up to 2 dynamically fetched real workshops ────────────
+    // Fetch the 2 most recently created ACTIVE real workshops.
+    // We intentionally do NOT filter by featured=true so that
+    // any registered workshop surfaces here automatically.
+    // Once there are enough featured workshops in the DB, a
+    // platform admin can switch this to filter by featured=true.
+    let realWorkshops: Workshop[] = [];
+    try {
+      realWorkshops = await db.query.workshops.findMany({
+        where: eq(workshops.status, 'ACTIVE'),
+        orderBy: [desc(workshops.createdAt)],
+        limit: 2,
+      });
+    } catch (err) {
+      // DB unavailable — return seeds only, never crash the landing page
+      console.warn('[workshop] Could not fetch real workshops for featured list:', err);
+    }
+ 
+    // Merge: seeds first (always 3), then real workshops (0–2)
+    // Deduplicate on name in case a real workshop matches a seed name
+    const seedNames = new Set(seeds.map((s) => s.name.toLowerCase()));
+    const uniqueReal = realWorkshops.filter(
+      (w) => !seedNames.has(w.name.toLowerCase()),
+    );
+ 
+    return [...seeds, ...uniqueReal.map((w) => ({ ...w, isSeeded: false }))];
+  }
+  
   // ----------------------------------------------------------
   // UPDATE (admin only)
   // ----------------------------------------------------------

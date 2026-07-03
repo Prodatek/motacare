@@ -36,8 +36,8 @@ export class WorkshopController {
   // GET /workshops/featured — public, used on landing page
   async listFeatured(req: FastifyRequest, rep: FastifyReply) {
     try {
-      const result = await this.service.listWorkshops({ page: 1, limit: 6, featured: true });
-      return rep.status(200).send({ statusCode: 200, ...result });
+      const result = await this.service.getFeaturedWorkshops();
+      return rep.status(200).send({ statusCode: 200, data: result });
     } catch (e) { return this.handleError(e, rep); }
   }
 
