@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://motacare-gateway:3000';
 
 const nextConfig = {
   output: 'standalone', // Required for Docker production image

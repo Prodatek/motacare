@@ -2,15 +2,16 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Car, Loader2, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
-import { authApi, setAccessToken, saveRefreshToken, ApiClientError } from '@/lib/api';
+import { ApiClientError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 
 export default function LoginPage() {
-  const { setUser } = useAuth() as any;
+  const { login } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -21,11 +22,9 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const result = await authApi.login(email, password);
-      setAccessToken(result.tokens.accessToken);
-      saveRefreshToken(result.tokens.refreshToken);
-      if (setUser) setUser(result.user);
-      router.push('/dashboard');
+      await login(email, password);
+      const redirectTo = searchParams.get('from') || '/dashboard';
+      router.push(redirectTo);
     } catch (error) {
       if (error instanceof ApiClientError) {
         toast.error(error.message);

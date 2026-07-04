@@ -1,20 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Car, Loader2, Eye, EyeOff, Wrench, User } from 'lucide-react';
 import { toast } from 'sonner';
-import { authApi, setAccessToken, saveRefreshToken, ApiClientError } from '@/lib/api';
+import { ApiClientError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { cn } from '@/lib/utils';
  
 
 
 type Role = 'OWNER' | 'FIXER';
  
 export default function RegisterPage() {
-  const { setUser } = useAuth() as any;
+  const { register } = useAuth();
   const router      = useRouter();
   const params      = useSearchParams();
  
@@ -30,10 +29,7 @@ export default function RegisterPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const result = await authApi.register({ email, password, firstName, lastName, role });
-      setAccessToken(result.tokens.accessToken);
-      saveRefreshToken(result.tokens.refreshToken);
-      if (setUser) setUser(result.user);
+      await register({ email, password, firstName, lastName, role });
       toast.success(`Welcome to Motacare, ${firstName}!`);
       router.push('/dashboard');
     } catch (error) {
