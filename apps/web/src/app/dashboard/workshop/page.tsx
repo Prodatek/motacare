@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Wrench, Users, ClipboardCheck, TrendingUp, Star,
   CheckCircle2, Clock, AlertCircle, Plus, Loader2,
-  ArrowRight, ChevronRight, X, LogOut, DollarSign,
+  ArrowRight, ChevronRight, X, LogOut, DollarSign, Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { workshopApi, ApiClientError } from '@/lib/api';
@@ -394,6 +394,9 @@ function WorkshopAdminView({ workshop }: { workshop: Workshop }) {
             <StatCard label="Team" value={`${workshop.currentFixerCount}/${workshop.maxFixers}`}
               sub="fixers"
               icon={<Users className="h-5 w-5" />} colour="bg-purple-50 text-purple-600" />
+            <StatCard label="Profile views" value={stats.viewCount ?? 0}
+              sub="all time"
+              icon={<Eye className="h-5 w-5" />} colour="bg-sky-50 text-sky-600" />
           </div>
 
           {/* Per-fixer breakdown */}

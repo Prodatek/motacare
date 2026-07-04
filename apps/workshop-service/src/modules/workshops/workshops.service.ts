@@ -174,7 +174,23 @@ export class WorkshopService {
       },
     });
     if (!workshop) throw new NotFoundError('Workshop not found');
+    this.incrementViewCount(workshopId).catch(() => {});
     return workshop as Workshop & { members: WorkshopMember[] };
+  }
+
+  //-----------------------------------------------
+  //INCREMENT VIEW COUNT
+  //------------------------------------------------------
+  async incrementViewCount(workshopId: string): Promise<void> {
+    try {
+      await db
+        .update(workshops)
+        .set({ viewCount: sql`${workshops.viewCount} + 1` })
+        .where(eq(workshops.id, workshopId));
+    } catch (err) {
+      // Non-fatal — log and move on
+      console.warn('[workshop] Failed to increment view count:', err);
+    }
   }
 
   // ----------------------------------------------------------
@@ -591,6 +607,7 @@ export class WorkshopService {
 
     return {
       workshopId, period: { from: from.toISOString(), to: to.toISOString() },
+      viewCount: workshop.viewCount,
       totalInspections: inspData?.total ?? 0, completedInspections: inspData?.completed ?? 0,
       totalFixJobs: fixData?.total ?? 0, completedFixJobs: fixData?.completed ?? 0,
       deliveredFixJobs: fixData?.delivered ?? 0, totalRevenue: fixData?.totalRevenue ?? 0,

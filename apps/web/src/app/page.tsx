@@ -294,7 +294,7 @@ export default function HomePage() {
                 Trusted workshops using Motacare to deliver transparent, documented vehicle service
               </p>
             </div>
-            <Link href="/dashboard/workshop" style={{
+             <Link href="/workshops" style={{
               display: 'flex', alignItems: 'center', gap: 6,
               fontSize: 13, color: 'var(--brand-400)', textDecoration: 'none', fontWeight: 500,
             }}>

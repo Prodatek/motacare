@@ -62,6 +62,7 @@ export const workshops = pgTable(
     // Denormalised lifetime totals (updated on each inspection/fix job completion)
     totalInspections: integer('total_inspections').notNull().default(0),
     totalFixJobs:     integer('total_fix_jobs').notNull().default(0),
+    viewCount: integer('view_count').notNull().default(0),
 
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
