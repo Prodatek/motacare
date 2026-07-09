@@ -61,12 +61,13 @@ function toSlug(name: string): string {
 async function uniqueSlug(base: string): Promise<string> {
   let suffix = 0;
   const slug = toSlug(base);
-  while (true) {
+  while (suffix < 10000) {
     const candidate = suffix === 0 ? slug : `${slug}-${suffix}`;
     const existing = await db.query.workshops.findFirst({ where: eq(workshops.slug, candidate) });
     if (!existing) return candidate;
     suffix++;
   }
+  throw new Error(`Unable to generate unique slug for: ${base}`);
 }
 
 // Case-insensitive name uniqueness check
