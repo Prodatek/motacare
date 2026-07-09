@@ -365,29 +365,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     });
   });
  
-  // ── GET USER BY ID (workshop-service, admin-service) ────────
-  fastify.post('/internal/user-by-id', { schema: { hide: true } }, async (request, reply) => {
-    const { userId } = request.body as { userId: string };
-    if (!userId) {
-      return reply.status(400).send({ statusCode: 400, error: 'Bad Request', message: 'userId required' });
-    }
-    const { eq } = await import('drizzle-orm');
-    const { db } = await import('../../db');
-    const { users } = await import('../../db/schema');
  
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-      columns: {
-        id: true, email: true, firstName: true, lastName: true,
-        role: true, phone: true, isActive: true, workshopId: true,
-        subscriptionTier: true, createdAt: true,
-        passwordHash: false, emailVerificationToken: false,
-      },
-    });
- 
-    if (!user) return reply.status(404).send({ statusCode: 404, error: 'Not Found', message: 'User not found' });
-    return reply.status(200).send({ statusCode: 200, data: user });
-  });
  
   // ── SUSPEND / REACTIVATE USER (admin-service) ────────────────
   fastify.post('/internal/set-user-active', { schema: { hide: true } }, async (request, reply) => {
@@ -410,28 +388,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     });
   });
  
-  // ── CHANGE USER ROLE (admin-service, workshop-service) ────────
-  fastify.post('/internal/update-user-role', { schema: { hide: true } }, async (request, reply) => {
-    const { userId, role, workshopId = null } = request.body as {
-      userId: string;
-      role: string;
-      workshopId?: string | null;
-    };
-    if (!userId || !role) {
-      return reply.status(400).send({ statusCode: 400, message: 'userId and role required' });
-    }
-    const { eq } = await import('drizzle-orm');
-    const { db } = await import('../../db');
-    const { users } = await import('../../db/schema');
- 
-    await db
-      .update(users)
-      .set({ role: role as any, workshopId: workshopId ?? null, updatedAt: new Date() })
-      .where(eq(users.id, userId));
- 
-    return reply.status(200).send({ statusCode: 200, message: 'Role updated' });
-  });
- 
+  
   // ── PLATFORM STATS (admin-service) ───────────────────────────
   fastify.get('/internal/stats', { schema: { hide: true } }, async (_request, reply) => {
     const now = new Date();

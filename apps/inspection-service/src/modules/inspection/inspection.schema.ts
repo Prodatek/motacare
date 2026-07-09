@@ -56,13 +56,21 @@ export const batchUpdateItemsSchema = z.object({
 // optional for DRAFT. The service enforces this at runtime.
 // ============================================================
 
-export const completeInspectionSchema = z.object({
-  outcome: z.enum(['COMPLETED', 'NEEDS_FOLLOWUP', 'DRAFT'], {
-    required_error: 'outcome is required (COMPLETED, NEEDS_FOLLOWUP, or DRAFT)',
-    invalid_type_error: 'outcome must be COMPLETED, NEEDS_FOLLOWUP, or DRAFT',
+export const completeInspectionSchema = z.union([
+  z.object({
+    outcome: z.enum(['COMPLETED', 'NEEDS_FOLLOWUP', 'DRAFT'], {
+      required_error: 'outcome is required (COMPLETED, NEEDS_FOLLOWUP, or DRAFT)',
+      invalid_type_error: 'outcome must be COMPLETED, NEEDS_FOLLOWUP, or DRAFT',
+    }),
+    summary: z.string().max(2000).optional().nullable(),
   }),
-  summary: z.string().max(2000).optional().nullable(),
-});
+  z.object({
+    summary: z.string().max(2000).optional().nullable(),
+  }).transform((data) => ({
+    outcome: 'COMPLETED' as const,
+    summary: data.summary,
+  })),
+]);
 
 // ============================================================
 // CREATE FIX JOB (nested under inspection — legacy route)

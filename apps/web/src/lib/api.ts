@@ -295,10 +295,10 @@ export const inspectionApi = {
       body: JSON.stringify(payload),
     }),
 
-  complete: (inspectionId: string, summary: string) =>
+  complete: (inspectionId: string, outcome: 'COMPLETED' | 'NEEDS_FOLLOWUP' | 'DRAFT', summary?: string) =>
     request<Inspection>(`/inspections/${inspectionId}/complete`, {
       method: 'POST',
-      body: JSON.stringify({ summary }),
+      body: JSON.stringify({ outcome, summary }),
     }),
 
   createFixJob: (inspectionId: string, payload: {
