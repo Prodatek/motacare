@@ -4,12 +4,21 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Car, ClipboardCheck, LayoutDashboard,
-  LogOut, Wrench, Menu, X, CreditCard
+  BarChart2,
+  Building2,
+  Car,
+  ClipboardCheck,
+  CreditCard,
+  History,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Users,
+  Wrench,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { cn, getInitials } from '@/lib/utils';
-import { Building2 } from 'lucide-react';
 
 const getNavItems = (role: string) => {
   const base = [
