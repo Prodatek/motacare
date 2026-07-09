@@ -303,4 +303,167 @@ export async function authRoutes(fastify: FastifyInstance) {
     await db.update(users).set({ isActive, updatedAt: new Date() }).where(eq(users.id, userId));
     return reply.status(200).send({ statusCode: 200, message: isActive ? 'User reactivated' : 'User suspended' });
   });
+
+
+   // ── GET ALL USERS (admin-service) ───────────────────────────
+  fastify.get('/internal/users', { schema: { hide: true } }, async (request, reply) => {
+    const {
+      page = '1', limit = '20', role, search, isActive, sort = 'createdAt:desc',
+    } = request.query as Record<string, string>;
+ 
+    const { eq, ilike, and, desc, count, or, sql } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { users } = await import('../../db/schema');
+ 
+    const conditions: any[] = [];
+    if (role)     conditions.push(eq(users.role as any, role));
+    if (isActive !== undefined) conditions.push(eq(users.isActive, isActive === 'true'));
+    if (search) {
+      conditions.push(or(
+        ilike(users.email,     `%${search}%`),
+        ilike(users.firstName, `%${search}%`),
+        ilike(users.lastName,  `%${search}%`),
+      ));
+    }
+ 
+    const where    = conditions.length > 0 ? and(...conditions) : undefined;
+    const pageNum  = Math.max(1, Number(page));
+    const limitNum = Math.min(100, Math.max(1, Number(limit)));
+    const offset   = (pageNum - 1) * limitNum;
+ 
+    const [rows, [{ value: total }]] = await Promise.all([
+      db
+        .select({
+          id:               users.id,
+          email:            users.email,
+          firstName:        users.firstName,
+          lastName:         users.lastName,
+          role:             users.role,
+          isActive:         users.isActive,
+          subscriptionTier: users.subscriptionTier,
+          workshopId:       users.workshopId,
+          createdAt:        users.createdAt,
+          lastLoginAt:      users.lastLoginAt,
+        })
+        .from(users)
+        .where(where)
+        .orderBy(desc(users.createdAt))
+        .limit(limitNum)
+        .offset(offset),
+      db.select({ value: count() }).from(users).where(where),
+    ]);
+ 
+    return reply.status(200).send({
+      statusCode: 200,
+      data: rows,
+      pagination: {
+        total:      Number(total),
+        page:       pageNum,
+        limit:      limitNum,
+        totalPages: Math.ceil(Number(total) / limitNum),
+      },
+    });
+  });
+ 
+  // ── GET USER BY ID (workshop-service, admin-service) ────────
+  fastify.post('/internal/user-by-id', { schema: { hide: true } }, async (request, reply) => {
+    const { userId } = request.body as { userId: string };
+    if (!userId) {
+      return reply.status(400).send({ statusCode: 400, error: 'Bad Request', message: 'userId required' });
+    }
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { users } = await import('../../db/schema');
+ 
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: {
+        id: true, email: true, firstName: true, lastName: true,
+        role: true, phone: true, isActive: true, workshopId: true,
+        subscriptionTier: true, createdAt: true,
+        passwordHash: false, emailVerificationToken: false,
+      },
+    });
+ 
+    if (!user) return reply.status(404).send({ statusCode: 404, error: 'Not Found', message: 'User not found' });
+    return reply.status(200).send({ statusCode: 200, data: user });
+  });
+ 
+  // ── SUSPEND / REACTIVATE USER (admin-service) ────────────────
+  fastify.post('/internal/set-user-active', { schema: { hide: true } }, async (request, reply) => {
+    const { userId, isActive } = request.body as { userId: string; isActive: boolean };
+    if (!userId || isActive === undefined) {
+      return reply.status(400).send({ statusCode: 400, message: 'userId and isActive required' });
+    }
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { users } = await import('../../db/schema');
+ 
+    await db
+      .update(users)
+      .set({ isActive, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+ 
+    return reply.status(200).send({
+      statusCode: 200,
+      message: isActive ? 'User reactivated successfully' : 'User suspended successfully',
+    });
+  });
+ 
+  // ── CHANGE USER ROLE (admin-service, workshop-service) ────────
+  fastify.post('/internal/update-user-role', { schema: { hide: true } }, async (request, reply) => {
+    const { userId, role, workshopId = null } = request.body as {
+      userId: string;
+      role: string;
+      workshopId?: string | null;
+    };
+    if (!userId || !role) {
+      return reply.status(400).send({ statusCode: 400, message: 'userId and role required' });
+    }
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { users } = await import('../../db/schema');
+ 
+    await db
+      .update(users)
+      .set({ role: role as any, workshopId: workshopId ?? null, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+ 
+    return reply.status(200).send({ statusCode: 200, message: 'Role updated' });
+  });
+ 
+  // ── PLATFORM STATS (admin-service) ───────────────────────────
+  fastify.get('/internal/stats', { schema: { hide: true } }, async (_request, reply) => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+ 
+    const { sql, gte, count } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { users } = await import('../../db/schema');
+ 
+    const [totals, monthly] = await Promise.all([
+      db.select({
+        total: count(users.id),
+        byRole: sql<string>`json_build_object(
+          'OWNER',          COUNT(*) FILTER (WHERE role = 'OWNER'),
+          'FIXER',          COUNT(*) FILTER (WHERE role = 'FIXER'),
+          'WORKSHOP_ADMIN', COUNT(*) FILTER (WHERE role = 'WORKSHOP_ADMIN'),
+          'ADMIN',          COUNT(*) FILTER (WHERE role = 'ADMIN')
+        )`,
+      }).from(users),
+ 
+      db.select({ value: count() })
+        .from(users)
+        .where(gte(users.createdAt, startOfMonth)),
+    ]);
+ 
+    return reply.status(200).send({
+      statusCode: 200,
+      data: {
+        total:        Number(totals[0]?.total ?? 0),
+        byRole:       totals[0]?.byRole ?? {},
+        newThisMonth: Number(monthly[0]?.value ?? 0),
+      },
+    });
+  });
 }

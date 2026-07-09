@@ -452,3 +452,155 @@ export const workshopApi = {
     return request<WorkshopStats>(`/workshops/${id}/stats${q ? `?${q}` : ''}`);
   },
 };
+
+// ── TYPES - phase4 ────────────────────────────────────────────────────
+ 
+export interface PlatformMetrics {
+  users: {
+    total: number; owners: number; fixers: number;
+    workshopAdmins: number; newThisMonth: number;
+  };
+  vehicles:      { total: number; active: number };
+  inspections:   { total: number; thisMonth: number; completed: number; inProgress: number };
+  fixJobs:       { total: number; thisMonth: number; delivered: number; totalRevenue: number };
+  workshops:     { total: number; active: number; pendingApproval: number; totalViews: number };
+  subscriptions: { free: number; pro: number; workshop: number; totalMonthlyRevenue: number };
+  updatedAt: string;
+}
+ 
+export interface AdminUser {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  isActive: boolean;
+  subscriptionTier: string;
+  workshopId: string | null;
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+ 
+export interface AdminSubscription {
+  id: string;
+  userId: string;
+  tier: string;
+  status: string;
+  vehiclesAllowed: number;
+  inspectionsPerMonth: number;
+  currentPeriodEnd: string | null;
+  createdAt: string;
+}
+ 
+// ── ADMIN API ─────────────────────────────────────────────────
+ 
+export const adminApi = {
+  // Platform
+  getMetrics: () =>
+    request<PlatformMetrics>('/admin/platform/metrics'),
+ 
+  // Users
+  listUsers: (params?: { page?: number; limit?: number; role?: string; search?: string; isActive?: boolean }) => {
+    const q = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any,
+    ).toString();
+    return request<PaginatedResponse<AdminUser>>(`/admin/users${q ? `?${q}` : ''}`);
+  },
+ 
+  getUser: (id: string) =>
+    request<{ user: AdminUser; subscription: AdminSubscription | null }>(`/admin/users/${id}`),
+ 
+  suspendUser: (id: string) =>
+    request<void>(`/admin/users/${id}/suspend`, { method: 'POST' }),
+ 
+  reactivateUser: (id: string) =>
+    request<void>(`/admin/users/${id}/reactivate`, { method: 'POST' }),
+ 
+  setUserRole: (id: string, role: string) =>
+    request<void>(`/admin/users/${id}/role`, { method: 'POST', body: JSON.stringify({ role }) }),
+ 
+  // Workshops
+  setFeatured: (id: string, featured: boolean) =>
+    request<void>(`/admin/workshops/${id}/featured`, { method: 'POST', body: JSON.stringify({ featured }) }),
+ 
+  suspendWorkshop: (id: string) =>
+    request<void>(`/admin/workshops/${id}/suspend`, { method: 'POST' }),
+ 
+  activateWorkshop: (id: string) =>
+    request<void>(`/admin/workshops/${id}/activate`, { method: 'POST' }),
+ 
+  // Billing
+  listSubscriptions: (params?: { page?: number; limit?: number; tier?: string }) => {
+    const q = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any,
+    ).toString();
+    return request<PaginatedResponse<AdminSubscription>>(`/admin/billing/subscriptions${q ? `?${q}` : ''}`);
+  },
+};
+ 
+// ── CRM API ───────────────────────────────────────────────────
+ 
+export interface CrmCustomer {
+  ownerId: string;
+  ownerName: string;
+  totalFixJobs: number;
+  totalSpend: number;
+  lastVisitAt: string | null;
+  firstVisitAt: string | null;
+}
+ 
+export interface CrmNote {
+  id: string;
+  type: 'GENERAL' | 'PREFERENCE' | 'WARNING' | 'FOLLOWUP';
+  content: string;
+  vehicleHash?: string | null;
+  inspectionId?: string | null;
+  fixJobId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+ 
+export interface CrmCustomerProfile {
+  ownerId: string;
+  ownerName: string;
+  ownerEmail: string;
+  ownerPhone: string | null;
+  totalInspections: number;
+  totalFixJobs: number;
+  totalSpend: number;
+  lastVisitAt: string | null;
+  firstVisitAt: string | null;
+  vehicles: Array<{ hash: string; make: string; model: string; year: number; licensePlate: string }>;
+  notes: CrmNote[];
+  jobs: any[];
+}
+ 
+export const crmApi = {
+  listCustomers: (params?: { page?: number; limit?: number; search?: string }) => {
+    const q = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any,
+    ).toString();
+    return request<{ customers: CrmCustomer[]; total: number }>(`/crm/customers${q ? `?${q}` : ''}`);
+  },
+ 
+  getCustomer: (ownerId: string) =>
+    request<CrmCustomerProfile>(`/crm/customers/${ownerId}`),
+ 
+  createNote: (ownerId: string, payload: { type: CrmNote['type']; content: string; vehicleHash?: string; inspectionId?: string; fixJobId?: string }) =>
+    request<CrmNote>(`/crm/customers/${ownerId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+ 
+  updateNote: (noteId: string, payload: { type?: CrmNote['type']; content?: string }) =>
+    request<CrmNote>(`/crm/notes/${noteId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+ 
+  deleteNote: (noteId: string) =>
+    request<void>(`/crm/notes/${noteId}`, { method: 'DELETE' }),
+ 
+  getRecentCustomers: (limit = 5) =>
+    request<CrmCustomer[]>(`/crm/customers/recent?limit=${limit}`),
+};

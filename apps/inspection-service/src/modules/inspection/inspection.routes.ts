@@ -165,4 +165,33 @@ export async function fixJobRoutes(fastify: FastifyInstance) {
     return reply.status(200).send({ statusCode: 200, data: { count: Number(value) } });
   });
 
+  // `hide` is used by our docs plugin but isn't part of Fastify's
+  // official route schema type. Cast to any to avoid TS error.
+  fastify.get('/inspections/internal/stats', { schema: { hide: true } as any }, async (request, reply) => {
+    const { from } = request.query as { from?: string };
+    const { count, sql, gte } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { inspections } = await import('../../db/schema');
+ 
+    const fromDate = from ? new Date(from) : undefined;
+    const where    = fromDate ? gte(inspections.createdAt, fromDate) : undefined;
+ 
+    const [allTimeRow] = await db.select({ value: count() }).from(inspections);
+    const [periodRow]  = await db.select({
+      total:      count(inspections.id),
+      completed:  sql<number>`COUNT(*) FILTER (WHERE status IN ('COMPLETED','NEEDS_FOLLOWUP'))`,
+      inProgress: sql<number>`COUNT(*) FILTER (WHERE status = 'IN_PROGRESS')`,
+    }).from(inspections).where(where);
+ 
+    return reply.status(200).send({
+      statusCode: 200,
+      data: {
+        allTime:    Number(allTimeRow?.value ?? 0),
+        total:      Number(periodRow?.total ?? 0),
+        completed:  Number(periodRow?.completed ?? 0),
+        inProgress: Number(periodRow?.inProgress ?? 0),
+      },
+    });
+  });
+
 }

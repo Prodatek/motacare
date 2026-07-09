@@ -84,4 +84,20 @@ export async function vehicleRoutes(fastify: FastifyInstance) {
   },
     (req, rep) => vehicleController.internalLookup(req as any, rep),
   );
+
+  fastify.get('/vehicles/internal/stats', { schema: { hide: true } as any }, async (_request, reply) => {
+    const { count, eq, sql } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { vehicles } = await import('../../db/schema');
+ 
+    const [row] = await db.select({
+      total:  count(vehicles.id),
+      active: sql<number>`COUNT(*) FILTER (WHERE status = 'ACTIVE')`,
+    }).from(vehicles);
+ 
+    return reply.status(200).send({
+      statusCode: 200,
+      data: { total: Number(row?.total ?? 0), active: Number(row?.active ?? 0) },
+    });
+  });
 }

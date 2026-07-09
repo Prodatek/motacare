@@ -41,4 +41,46 @@ export async function workshopRoutes(fastify: FastifyInstance) {
 
   // ── Internal (no JWT — other services only) ──────────────
   fastify.get('/internal/fixer/:fixerId', (req: any, rep) => ctrl.getFixerWorkshop(req, rep));
+
+  fastify.get('/workshops/internal/stats', { schema: { hide: true } }, async (_request, reply) => {
+    const { count, sql } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { workshops } = await import('../../db/schema');
+ 
+    const [row] = await db.select({
+      total:           count(workshops.id),
+      active:          sql<number>`COUNT(*) FILTER (WHERE status = 'ACTIVE')`,
+      pendingApproval: sql<number>`COUNT(*) FILTER (WHERE status = 'PENDING_APPROVAL')`,
+      totalViews:      sql<number>`COALESCE(SUM(view_count), 0)`,
+    }).from(workshops);
+ 
+    return reply.status(200).send({
+      statusCode: 200,
+      data: {
+        total:           Number(row?.total ?? 0),
+        active:          Number(row?.active ?? 0),
+        pendingApproval: Number(row?.pendingApproval ?? 0),
+        totalViews:      Number(row?.totalViews ?? 0),
+      },
+    });
+  });
+ 
+  // Internal featured/status management endpoints (called by admin-service)
+  fastify.post('/workshops/internal/:id/featured', { schema: { hide: true } }, async (request: any, reply) => {
+    const { featured } = request.body as { featured: boolean };
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { workshops } = await import('../../db/schema');
+    await db.update(workshops).set({ featured, updatedAt: new Date() }).where(eq(workshops.id, request.params.id));
+    return reply.status(200).send({ statusCode: 200, message: 'Featured status updated' });
+  });
+ 
+  fastify.post('/workshops/internal/:id/status', { schema: { hide: true } }, async (request: any, reply) => {
+    const { status } = request.body as { status: 'ACTIVE' | 'SUSPENDED' };
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { workshops } = await import('../../db/schema');
+    await db.update(workshops).set({ status, updatedAt: new Date() }).where(eq(workshops.id, request.params.id));
+    return reply.status(200).send({ statusCode: 200, message: `Workshop ${status.toLowerCase()}` });
+  });
 }
