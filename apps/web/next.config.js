@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://motacare-gateway:3000';
+
 const nextConfig = {
   output: 'standalone', // Required for Docker production image
   experimental: {
@@ -10,7 +12,7 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL}/:path*`,
+        destination: `${apiBaseUrl}/:path*`,
       },
     ];
   },

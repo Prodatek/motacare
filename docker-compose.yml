@@ -206,6 +206,7 @@ services:
       INSPECTION_SERVICE_URL: http://inspection-service:3003
       FIX_JOBS_SERVICE_URL: http://fix-jobs:3004
       SUBSCRIPTION_SERVICE_URL: http://subscription-service:3007
+      WORKSHOP_SERVICE_URL: http://workshop-service:3008
     ports:
       - '3000:3000'
     volumes:
@@ -215,11 +216,18 @@ services:
     networks:
       - motacare-network
     depends_on:
-      - auth-service
-      - vehicle-service
-      - inspection-service
-      - fix-jobs
-      - subscription-service
+      workshop-service:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      vehicle-service:
+        condition: service_started
+      inspection-service:
+        condition: service_started
+      fix-jobs:
+        condition: service_started
+      subscription-service:
+        condition: service_started
   
   fix-jobs:
     build:
@@ -335,6 +343,43 @@ services:
         condition: service_healthy
       auth-service:
         condition: service_started
+  
+  workshop-service:
+    build:
+      context: .
+      dockerfile: infra/docker/workshop-service.Dockerfile
+      target: development
+    container_name: motacare-workshops
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3008
+      JWT_SECRET: ${JWT_SECRET}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-motacare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-motacare_dev_password}
+      POSTGRES_DB: ${WORKSHOP_DB_NAME:-motacare_workshops}
+      AUTH_SERVICE_URL: http://auth-service:3001
+      INSPECTION_SERVICE_URL: http://inspection-service:3003
+      FIX_JOBS_SERVICE_URL: http://fix-jobs:3004
+      MAX_FIXERS_PER_WORKSHOP: 5
+    ports:
+      - '3008:3008'
+    volumes:
+      - ./apps/workshop-service:/app/apps/workshop-service
+      - ./packages:/app/packages
+      - /app/node_modules
+      - /app/apps/workshop-service/node_modules
+    networks:
+      - motacare-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+  
+  
   web:
     build:
       context: .

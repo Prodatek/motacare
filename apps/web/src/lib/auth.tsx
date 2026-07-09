@@ -78,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await authApi.login(email, password);
     setAccessToken(result.tokens.accessToken);
     saveRefreshToken(result.tokens.refreshToken);
+    document.cookie = 'mc_session=1; path=/; max-age=604800; SameSite=Lax';
     setState({ user: result.user, isLoading: false, isAuthenticated: true });
   }, []);
 
@@ -85,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await authApi.register(payload);
     setAccessToken(result.tokens.accessToken);
     saveRefreshToken(result.tokens.refreshToken);
+    document.cookie = 'mc_session=1; path=/; max-age=604800; SameSite=Lax';
     setState({ user: result.user, isLoading: false, isAuthenticated: true });
   }, []);
 

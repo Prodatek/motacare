@@ -12,12 +12,9 @@ import { registerAuthProxy } from './routes/auth.proxy';
 import { registerVehicleProxy } from './routes/vehicle.proxy';
 import { registerInspectionProxy } from './routes/inspection.proxy';
 import { registerFixJobsProxy } from './routes/fix-jobs.proxy';
-import { buildRateLimitErrorResponse } from './middleware/rate-limit';
 import { registerSubscriptionProxy } from './routes/subscription.proxy';
-
-// ============================================================
-// SERVER FACTORY — exported for testing
-// ============================================================
+import { registerWorkshopProxy } from './routes/workshop.proxy';
+import { buildRateLimitErrorResponse } from './middleware/rate-limit';
 
 export async function buildServer() {
   const fastify = Fastify({
@@ -29,19 +26,13 @@ export async function buildServer() {
           : undefined,
     },
     trustProxy: true,
-    // Generate unique request IDs for distributed tracing
     genReqId: () => crypto.randomUUID(),
   });
 
-  // ----------------------------------------------------------
-  // SECURITY
-  // ----------------------------------------------------------
+  // ── Security ─────────────────────────────────────────────
 
-  await fastify.register(fastifyHelmet, {
-    contentSecurityPolicy: false, // Swagger UI needs this off
-  });
+  await fastify.register(fastifyHelmet, { contentSecurityPolicy: false });
 
-  // Parse allowed origins from env (comma-separated in production)
   const origins = env.NODE_ENV === 'production'
     ? env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
     : true;
@@ -53,7 +44,6 @@ export async function buildServer() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Global rate limit — individual routes can override with tighter limits
   await fastify.register(fastifyRateLimit, {
     global: true,
     max: 200,
@@ -61,49 +51,34 @@ export async function buildServer() {
     errorResponseBuilder: buildRateLimitErrorResponse,
   });
 
-  // ----------------------------------------------------------
-  // JWT — for gateway-level verification
-  // ----------------------------------------------------------
+  // ── JWT ──────────────────────────────────────────────────
 
-  await fastify.register(fastifyJwt, {
-    secret: env.JWT_SECRET,
-  });
+  await fastify.register(fastifyJwt, { secret: env.JWT_SECRET });
 
-  // ----------------------------------------------------------
-  // REQUEST LOGGING
-  // ----------------------------------------------------------
+  // ── Request logging ──────────────────────────────────────
 
   await registerRequestLogger(fastify);
 
-  // ----------------------------------------------------------
-  // SWAGGER DOCS (dev + staging only)
-  // Aggregates all service routes into a single API reference
-  // ----------------------------------------------------------
+  // ── Swagger docs ─────────────────────────────────────────
 
   if (env.NODE_ENV !== 'production') {
     await fastify.register(fastifySwagger, {
       openapi: {
         openapi: '3.0.0',
-        info: {
-          title: 'Motacare API',
-          description: 'Unified API gateway for all Motacare services',
-          version: '1.0.0',
-        },
+        info: { title: 'Motacare API', description: 'Unified API gateway', version: '1.0.0' },
         servers: [{ url: `http://localhost:${env.PORT}`, description: 'Gateway' }],
         components: {
           securitySchemes: {
-            bearerAuth: {
-              type: 'http',
-              scheme: 'bearer',
-              bearerFormat: 'JWT',
-            },
+            bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
           },
         },
         tags: [
-          { name: 'Auth', description: 'Authentication and user management' },
-          { name: 'Vehicles', description: 'Vehicle registration and management' },
-          { name: 'Inspections', description: 'Inspection sessions and checklists' },
-          { name: 'Fix Jobs', description: 'Fix job lifecycle management' },
+          { name: 'Auth',          description: 'Authentication and user management' },
+          { name: 'Vehicles',      description: 'Vehicle registration and management' },
+          { name: 'Inspections',   description: 'Inspection sessions and checklists' },
+          { name: 'Fix Jobs',      description: 'Fix job lifecycle management' },
+          { name: 'Subscriptions', description: 'Plan management and billing' },
+          { name: 'Workshops',     description: 'Workshop profiles and membership' },
         ],
       },
     });
@@ -114,17 +89,13 @@ export async function buildServer() {
     });
   }
 
-  // ----------------------------------------------------------
-  // AUTH MIDDLEWARE (decorates fastify.authenticate etc.)
-  // Must be registered BEFORE routes
-  // ----------------------------------------------------------
+  // ── Auth middleware ──────────────────────────────────────
 
   await registerAuthMiddleware(fastify);
 
-  // ----------------------------------------------------------
-  // HEALTH CHECK
-  // Checks all downstream services and returns aggregate status
-  // ----------------------------------------------------------
+  // ── Health check ─────────────────────────────────────────
+  // Checks all downstream services. Uses Promise.allSettled so
+  // one unreachable service doesn't prevent the others from reporting.
 
   fastify.get('/health', async (_request, reply) => {
     const checks = await Promise.allSettled([
@@ -133,12 +104,11 @@ export async function buildServer() {
       fetch(`${env.INSPECTION_SERVICE_URL}/health`).then((r) => ({ service: 'inspection', ok: r.ok })),
       fetch(`${env.FIX_JOBS_SERVICE_URL}/health`).then((r) => ({ service: 'fix-jobs', ok: r.ok })),
       fetch(`${env.SUBSCRIPTION_SERVICE_URL}/health`).then((r) => ({ service: 'subscription', ok: r.ok })),
+      fetch(`${env.WORKSHOP_SERVICE_URL}/health`).then((r) => ({ service: 'workshop', ok: r.ok })),
     ]);
 
     const results = checks.map((c) =>
-      c.status === 'fulfilled'
-        ? c.value
-        : { service: 'unknown', ok: false },
+      c.status === 'fulfilled' ? c.value : { service: 'unknown', ok: false },
     );
 
     const allHealthy = results.every((r) => r.ok);
@@ -154,20 +124,19 @@ export async function buildServer() {
     });
   });
 
-  // ----------------------------------------------------------
-  // PROXY ROUTES
-  // Order matters — more specific paths must come before wildcards
-  // ----------------------------------------------------------
+  // ── Proxy routes ─────────────────────────────────────────
+  // Order matters — more specific paths must come before wildcards.
+  // Workshop routes include public GET routes so must be registered
+  // WITHOUT requiring authentication on those specific paths.
 
   await registerAuthProxy(fastify);
   await registerVehicleProxy(fastify);
   await registerInspectionProxy(fastify);
   await registerFixJobsProxy(fastify);
   await registerSubscriptionProxy(fastify);
+  await registerWorkshopProxy(fastify);    
 
-  // ----------------------------------------------------------
-  // 404 HANDLER — catches any unmatched route
-  // ----------------------------------------------------------
+  // ── 404 handler ──────────────────────────────────────────
 
   fastify.setNotFoundHandler((_request, reply) => {
     reply.status(404).send({
@@ -177,9 +146,7 @@ export async function buildServer() {
     });
   });
 
-  // ----------------------------------------------------------
-  // GLOBAL ERROR HANDLER
-  // ----------------------------------------------------------
+  // ── Global error handler ─────────────────────────────────
 
   fastify.setErrorHandler((error, _request, reply) => {
     fastify.log.error(error);
@@ -193,10 +160,6 @@ export async function buildServer() {
   return fastify;
 }
 
-// ============================================================
-// STARTUP
-// ============================================================
-
 async function start() {
   const server = await buildServer();
 
@@ -206,14 +169,14 @@ async function start() {
 ╔══════════════════════════════════════════════╗
 ║       🌐 Motacare API Gateway                ║
 ╠══════════════════════════════════════════════╣
-║  Port        : ${env.PORT}                          ║
-║  Env         : ${env.NODE_ENV.padEnd(16)}          ║
-║  Docs        : http://localhost:${env.PORT}/docs   ║
-║  Health      : http://localhost:${env.PORT}/health ║
+║  Port   : ${env.PORT}                               ║
+║  Env    : ${env.NODE_ENV.padEnd(20)}            ║
+║  Docs   : http://localhost:${env.PORT}/docs        ║
+║  Health : http://localhost:${env.PORT}/health      ║
 ╠══════════════════════════════════════════════╣
-║  → auth-service      : ${env.AUTH_SERVICE_URL.padEnd(20)}║
-║  → vehicle-service   : ${env.VEHICLE_SERVICE_URL.padEnd(20)}║
-║  → inspection-service: ${env.INSPECTION_SERVICE_URL.padEnd(20)}║
+║  Services registered:                        ║
+║  auth · vehicle · inspection · fix-jobs      ║
+║  subscription · workshop                     ║
 ╚══════════════════════════════════════════════╝
     `);
   } catch (err) {

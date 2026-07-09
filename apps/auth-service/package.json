@@ -23,7 +23,7 @@
     "@motacare/shared-types": "*",
     "@motacare/shared-utils": "*",
     "bcryptjs": "^2.4.3",
-    "drizzle-orm": "^0.30.10",
+    "drizzle-orm": "^0.45.2",
     "fastify": "^4.27.0",
     "pg": "^8.11.5",
     "zod": "^3.23.8"
@@ -31,7 +31,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/pg": "^8.11.6",
-    "drizzle-kit": "^0.21.4",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.10.5",
     "pino-pretty": "^11.0.0",
     "vitest": "^1.6.0",

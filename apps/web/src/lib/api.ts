@@ -10,26 +10,15 @@ import type {
 } from '@motacare/shared-types';
 
 // ============================================================
-// TYPES
+// API CLIENT
+// All requests go through the Next.js rewrite (/api → gateway).
+// This keeps the browser origin consistent and avoids CORS issues.
+//
+// Every method returns typed data or throws an ApiClientError
+// with the statusCode so components can handle specific cases.
 // ============================================================
 
-export interface FixJobStatusEntry {
-  id: string;
-  fixJobId: string;
-  fromStatus: string | null;
-  toStatus: string;
-  changedBy: string;
-  notes: string | null;
-  changedAt: string;
-}
-
-export type FixJobWithHistory = FixJob & { statusHistory: FixJobStatusEntry[] };
-
-export type PartEntry = { name: string; quantity: number; unitCost: number };
-
-// ============================================================
-// API CLIENT ERROR
-// ============================================================
+const BASE_URL = '/api';
 
 export class ApiClientError extends Error {
   constructor(
@@ -47,9 +36,11 @@ export class ApiClientError extends Error {
 // CORE FETCH WRAPPER
 // ============================================================
 
-const BASE_URL = '/api';
-
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
+  // Read access token from memory (set by auth module)
   const token = getAccessToken();
 
   const headers: Record<string, string> = {
@@ -58,66 +49,132 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...(options.headers as Record<string, string> ?? {}),
   };
 
-  const response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  const response = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers,
+  });
 
+  // Handle 401 — try to refresh token once, then redirect to login
   if (response.status === 401) {
     const refreshed = await tryRefreshToken();
-    if (refreshed) return request<T>(path, options);
+    if (refreshed) {
+      // Retry original request with new token
+      return request<T>(path, options);
+    }
+    // Refresh failed — boot to login
     clearTokens();
     window.location.href = '/login';
     throw new ApiClientError(401, 'Unauthorized', 'Session expired');
   }
 
-  const data = await response.json() as ApiResponse<T> & ApiError & { pagination?: unknown };
+  // ── Parse body ──────────────────────────────────────────────
+  // Always attempt JSON first. Fall back to text so a plain-text
+  // or HTML error body (e.g. a crashed upstream service) still
+  // produces a meaningful error message instead of a SyntaxError.
+  let data: ApiResponse<T> & ApiError & { pagination?: unknown };
+  const contentType = response.headers.get('content-type') ?? '';
+
+  if (contentType.includes('application/json')) {
+    try {
+      data = await response.json();
+    } catch {
+      // Server said Content-Type: application/json but body isn't valid JSON.
+      // Treat as a service error with the raw status code.
+      throw new ApiClientError(
+        response.status,
+        'Parse Error',
+        `The server returned an invalid response (HTTP ${response.status}). ` +
+        'This usually means the upstream service crashed or is starting up.',
+      );
+    }
+  } else {
+    // Non-JSON response — read text for the error message
+    const text = await response.text().catch(() => '');
+    if (!response.ok) {
+      throw new ApiClientError(
+        response.status,
+        `HTTP ${response.status}`,
+        text.slice(0, 200) ||
+          `The server returned HTTP ${response.status} with no body. ` +
+          'Check that all services are running.',
+      );
+    }
+    // A non-JSON 2xx is unusual — return empty object and let the caller handle it
+    return {} as T;
+  }
 
   if (!response.ok) {
     throw new ApiClientError(
       data.statusCode ?? response.status,
       data.error ?? 'Error',
-      data.message ?? 'An unexpected error occurred',
+      data.message ?? `HTTP ${response.status} — check that all services are running and the database is migrated.`,
       data.details,
     );
   }
 
-  // Paginated responses — return full object with data + pagination
+  // Paginated list response — return full { data, pagination } object
   if ('pagination' in data && data.pagination !== undefined) {
     return data as unknown as T;
   }
 
+  // Standard response — unwrap .data
   return (data.data ?? data) as T;
 }
 
 // ============================================================
-// TOKEN MANAGEMENT
+// TOKEN MANAGEMENT (in-memory for XSS safety)
+// Access token: memory only
+// Refresh token: httpOnly cookie (set by the server ideally,
+// or localStorage as a fallback for this phase)
 // ============================================================
 
 let _accessToken: string | null = null;
 
-export const setAccessToken = (t: string) => { _accessToken = t; };
-export const getAccessToken = (): string | null => _accessToken;
-export const clearTokens = () => { _accessToken = null; localStorage.removeItem('mc_refresh'); };
-export const saveRefreshToken = (t: string) => localStorage.setItem('mc_refresh', t);
-export const getRefreshToken = (): string | null => localStorage.getItem('mc_refresh');
+export function setAccessToken(token: string) {
+  _accessToken = token;
+}
+
+export function getAccessToken(): string | null {
+  return _accessToken;
+}
+
+export function clearTokens() {
+  _accessToken = null;
+  localStorage.removeItem('mc_refresh');
+}
+
+export function saveRefreshToken(token: string) {
+  localStorage.setItem('mc_refresh', token);
+}
+
+export function getRefreshToken(): string | null {
+  return localStorage.getItem('mc_refresh');
+}
 
 async function tryRefreshToken(): Promise<boolean> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return false;
+
   try {
-    const res = await fetch(`${BASE_URL}/auth/refresh`, {
+    const response = await fetch(`${BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
     });
-    if (!res.ok) return false;
-    const data = await res.json() as { data: TokenPair };
+
+    if (!response.ok) return false;
+
+    const data = await response.json() as { data: TokenPair };
     setAccessToken(data.data.accessToken);
     saveRefreshToken(data.data.refreshToken);
     return true;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 // ============================================================
-// AUTH API
+// AUTH ENDPOINTS
 // ============================================================
 
 export interface RegisterPayload {
@@ -138,19 +195,28 @@ export interface AuthResult {
 
 export const authApi = {
   register: (payload: RegisterPayload) =>
-    request<AuthResult>('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
+    request<AuthResult>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
   login: (email: string, password: string) =>
-    request<AuthResult>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+    request<AuthResult>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
 
   logout: (refreshToken: string) =>
-    request<void>('/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken }) }),
+    request<void>('/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken }),
+    }),
 
   me: () => request<BaseUser>('/auth/me'),
 };
 
 // ============================================================
-// VEHICLE API
+// VEHICLE ENDPOINTS
 // ============================================================
 
 export interface RegisterVehiclePayload {
@@ -169,11 +235,14 @@ export interface RegisterVehiclePayload {
 
 export const vehicleApi = {
   register: (payload: RegisterVehiclePayload) =>
-    request<Vehicle>('/vehicles', { method: 'POST', body: JSON.stringify(payload) }),
+    request<Vehicle>('/vehicles', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
   list: (params?: { page?: number; limit?: number; status?: string; search?: string }) => {
     const query = new URLSearchParams(
-      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any,
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any
     ).toString();
     return request<PaginatedResponse<Vehicle>>(`/vehicles${query ? `?${query}` : ''}`);
   },
@@ -181,13 +250,17 @@ export const vehicleApi = {
   get: (hash: string) => request<Vehicle>(`/vehicles/${hash}`),
 
   update: (hash: string, payload: Partial<RegisterVehiclePayload>) =>
-    request<Vehicle>(`/vehicles/${hash}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+    request<Vehicle>(`/vehicles/${hash}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
 
-  deactivate: (hash: string) => request<Vehicle>(`/vehicles/${hash}`, { method: 'DELETE' }),
+  deactivate: (hash: string) =>
+    request<Vehicle>(`/vehicles/${hash}`, { method: 'DELETE' }),
 };
 
 // ============================================================
-// INSPECTION API
+// INSPECTION ENDPOINTS
 // ============================================================
 
 export const inspectionApi = {
@@ -204,15 +277,12 @@ export const inspectionApi = {
       }),
     }),
 
-  list: (params?: { page?: number; status?: string; vehicleHash?: string; limit?: number }) => {
-    const query = new URLSearchParams(
-      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any,
-    ).toString();
+  list: (params?: { page?: number; status?: string; vehicleHash?: string }) => {
+    const query = new URLSearchParams(params as any).toString();
     return request<PaginatedResponse<Inspection>>(`/inspections${query ? `?${query}` : ''}`);
   },
 
-  get: (id: string) =>
-    request<Inspection & { items: any[]; stats: any }>(`/inspections/${id}`),
+  get: (id: string) => request<Inspection & { items: any[]; stats: any }>(`/inspections/${id}`),
 
   updateItem: (inspectionId: string, payload: {
     checkId: string;
@@ -220,147 +290,165 @@ export const inspectionApi = {
     severity?: string | null;
     notes?: string | null;
   }) =>
-    request<any>(`/inspections/${inspectionId}/items`, { method: 'PATCH', body: JSON.stringify(payload) }),
-
-  complete: (inspectionId: string, outcome: 'COMPLETED' | 'NEEDS_FOLLOWUP' | 'DRAFT', summary?: string) =>
-    request<Inspection>(`/inspections/${inspectionId}/complete`, {
-      method: 'POST',
-      body: JSON.stringify({ outcome, summary: summary ?? null }),
+    request<any>(`/inspections/${inspectionId}/items`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
     }),
 
-  createFixJob: (payload: {
-    inspectionId: string;
-    vehicleHash: string;
-    ownerId: string;
+  complete: (inspectionId: string, summary: string) =>
+    request<Inspection>(`/inspections/${inspectionId}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ summary }),
+    }),
+
+  createFixJob: (inspectionId: string, payload: {
     description: string;
     estimatedCompletionAt?: string;
     estimatedCost?: number;
-    currency?: string;
   }) =>
-    request<FixJob>('/fix-jobs', { method: 'POST', body: JSON.stringify(payload) }),
+    request<FixJob>(`/inspections/${inspectionId}/fix-jobs`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 };
 
 // ============================================================
-// FIX JOB API — full CRUD + parts + cancel
+// FIX JOB ENDPOINTS
 // ============================================================
 
 export const fixJobApi = {
-
-  list: (params?: {
-    page?: number;
-    limit?: number;
-    status?: string;
-    statuses?: string[];   // NEW — e.g. ['PENDING', 'IN_PROGRESS', 'AWAITING_PARTS']
-    vehicleHash?: string;
-  }) => {
-    const { statuses, ...rest } = params ?? {};
-    const query = new URLSearchParams(
-      Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) as any,
-    );
-    if (statuses?.length) {
-      query.set('statuses', statuses.join(','));
-    }
-    const qs = query.toString();
-    return request<PaginatedResponse<FixJob>>(`/fix-jobs${qs ? `?${qs}` : ''}`);
+  list: (params?: { page?: number; status?: string }) => {
+    const query = new URLSearchParams(params as any).toString();
+    return request<PaginatedResponse<FixJob>>(`/fix-jobs${query ? `?${query}` : ''}`);
   },
 
-  get: (id: string) =>
-    request<FixJobWithHistory | FixJob>(`/fix-jobs/${id}`),
+  get: (id: string) => request<FixJob>(`/fix-jobs/${id}`),
 
   update: (id: string, payload: {
     status?: string;
     estimatedCompletionAt?: string | null;
     finalCost?: number;
-    repairNotes?: string | null;
-    notes?: string;
+    repairNotes?: string;
   }) =>
-    request<FixJob>(`/fix-jobs/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-
-  cancel: (id: string, reason: string) =>
-    request<FixJob>(`/fix-jobs/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
-
-  addPart: (id: string, part: PartEntry) =>
-    request<FixJob>(`/fix-jobs/${id}/parts`, { method: 'POST', body: JSON.stringify(part) }),
-
-  removePart: (id: string, partIndex: number) =>
-    request<FixJob>(`/fix-jobs/${id}/parts/${partIndex}`, { method: 'DELETE' }),
-
-  history: (id: string) =>
-    request<FixJobStatusEntry[]>(`/fix-jobs/${id}/history`),
-
-  // Alias used from inspection modal
-  createFixJob: (payload: Parameters<typeof inspectionApi.createFixJob>[0]) =>
-    inspectionApi.createFixJob(payload),
+    request<FixJob>(`/fix-jobs/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
 };
+
 // ============================================================
-// SUBSCRIPTION API — add this section to apps/web/src/lib/api.ts
+// WORKSHOP API
 // ============================================================
 
-export interface PlanFeatures {
-  vehiclesAllowed: number;
-  inspectionsPerMonth: number;
-  fixersAllowed: number;
-  canExportReports: boolean;
-  canAccessObd: boolean;
-  canAccessAiSummary: boolean;
-}
-
-export interface PlanInfo {
-  name: string;
-  price: { monthly: number; yearly: number };
-  features: PlanFeatures;
-  description: string;
-}
-
-export interface PlansResponse {
-  FREE: PlanInfo;
-  PRO: PlanInfo;
-  WORKSHOP: PlanInfo;
-}
-
-export interface Subscription {
+export interface Workshop {
   id: string;
-  userId: string;
-  tier: 'FREE' | 'PRO' | 'WORKSHOP';
-  status: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'EXPIRED' | 'TRIALING';
-  billingInterval: 'MONTHLY' | 'YEARLY' | null;
-  currentPeriodStart: string | null;
-  currentPeriodEnd: string | null;
-  cancelAtPeriodEnd: boolean;
-  trialEndsAt: string | null;
-  vehiclesAllowed: number;
-  inspectionsPerMonth: number;
-  fixersAllowed: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  address: string;
+  city: string;
+  state: string;
+  phone: string | null;
+  email: string | null;
+  logoUrl: string | null;
+  coverImageUrl: string | null;
+  specialties: string[];
+  status: 'PENDING_APPROVAL' | 'ACTIVE' | 'SUSPENDED';
+  adminId: string;
+  maxFixers: number;
+  currentFixerCount: number;
+  featured: boolean;
+  totalInspections: number;
+  totalFixJobs: number;
   createdAt: string;
   updatedAt: string;
 }
 
-export const subscriptionApi = {
+export interface WorkshopMember {
+  id: string;
+  workshopId: string;
+  fixerId: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'LEFT';
+  joinRequestNote: string | null;
+  rejectionReason: string | null;
+  joinedAt: string | null;
+  leftAt: string | null;
+  createdAt: string;
+}
 
-  // Public — plan comparison table, no auth needed
-  getPlans: () => request<PlansResponse>('/subscriptions/plans'),
+export interface WorkshopStats {
+  workshopId: string;
+  period: { from: string; to: string };
+  totalInspections: number;
+  completedInspections: number;
+  totalFixJobs: number;
+  completedFixJobs: number;
+  deliveredFixJobs: number;
+  totalRevenue: number;
+  currency: string;
+  byFixer: Array<{
+    fixerId: string;
+    fixerName: string;
+    inspections: number;
+    fixJobs: number;
+    completedFixJobs: number;
+    revenue: number;
+    avgFixJobDurationHours: number | null;
+  }>;
+  trend: Array<{ week: string; fixJobs: number; revenue: number }>;
+}
 
-  // Current user's subscription (auto-creates FREE record if none exists)
-  getMySubscription: () => request<Subscription>('/subscriptions/me'),
+export const workshopApi = {
+  list: (params?: { page?: number; limit?: number; city?: string; search?: string; featured?: boolean }) => {
+    const query = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined)) as any,
+    ).toString();
+    return request<PaginatedResponse<Workshop>>(`/workshops${query ? `?${query}` : ''}`);
+  },
 
-  // Start a Stripe Checkout session — returns a URL to redirect to
-  createCheckout: (tier: 'PRO' | 'WORKSHOP', billingInterval: 'MONTHLY' | 'YEARLY') =>
-    request<{ url: string }>('/subscriptions/checkout', {
+  featured: () => request<PaginatedResponse<Workshop>>('/workshops/featured'),
+
+  get: (id: string) =>
+    request<Workshop & { members: WorkshopMember[] }>(`/workshops/${id}`),
+
+  getBySlug: (slug: string) =>
+    request<Workshop>(`/workshops/slug/${slug}`),
+
+  create: (payload: {
+    name: string; description?: string; address: string;
+    city: string; state: string; phone?: string; email?: string;
+    specialties?: string[];
+  }) =>
+    request<Workshop>('/workshops', { method: 'POST', body: JSON.stringify(payload) }),
+
+  update: (id: string, payload: Partial<{
+    name: string; description: string; address: string;
+    city: string; state: string; phone: string; email: string; specialties: string[];
+  }>) =>
+    request<Workshop>(`/workshops/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+
+  join: (workshopId: string, note?: string) =>
+    request<WorkshopMember>('/workshops/join', {
       method: 'POST',
-      body: JSON.stringify({ tier, billingInterval }),
+      body: JSON.stringify({ workshopId, note }),
     }),
 
-  // Open Stripe's billing portal — manage payment method, cancel, view invoices
-  createPortalSession: (returnUrl?: string) =>
-    request<{ url: string }>('/subscriptions/portal', {
+  leave: (id: string) =>
+    request<void>(`/workshops/${id}/leave`, { method: 'POST' }),
+
+  getPending: (id: string) =>
+    request<WorkshopMember[]>(`/workshops/${id}/members/pending`),
+
+  handleMember: (workshopId: string, memberId: string, action: 'APPROVE' | 'REJECT', rejectionReason?: string) =>
+    request<WorkshopMember>(`/workshops/${workshopId}/members/${memberId}`, {
       method: 'POST',
-      body: JSON.stringify(returnUrl ? { returnUrl } : {}),
+      body: JSON.stringify({ action, rejectionReason }),
     }),
 
-  // Cancel subscription — immediately or at period end
-  cancel: (immediately: boolean = false) =>
-    request<Subscription>('/subscriptions/cancel', {
-      method: 'POST',
-      body: JSON.stringify({ immediately }),
-    }),
+  getStats: (id: string, from?: string, to?: string) => {
+    const q = new URLSearchParams(
+      Object.fromEntries(Object.entries({ from, to }).filter(([, v]) => v !== undefined) as any),
+    ).toString();
+    return request<WorkshopStats>(`/workshops/${id}/stats${q ? `?${q}` : ''}`);
+  },
 };

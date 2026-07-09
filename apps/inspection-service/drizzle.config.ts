@@ -5,7 +5,6 @@ export default {
   dialect: 'postgresql',
   schema: './src/db/schema.ts',
   out: './drizzle',
-  driver: 'pg',
   dbCredentials: {
     host: env.POSTGRES_HOST,
     port: env.POSTGRES_PORT,

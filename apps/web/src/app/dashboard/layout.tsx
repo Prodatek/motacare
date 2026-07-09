@@ -9,14 +9,38 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { cn, getInitials } from '@/lib/utils';
+import { Building2 } from 'lucide-react';
 
-const NAV_ITEMS = [
-  { label: 'Dashboard',   href: '/dashboard',              icon: LayoutDashboard },
-  { label: 'Vehicles',    href: '/dashboard/vehicles',     icon: Car },
-  { label: 'Inspections', href: '/dashboard/inspections',  icon: ClipboardCheck },
-  { label: 'Fix Jobs',    href: '/dashboard/fix-jobs',     icon: Wrench },
-  { label: 'Subscription',  href: '/dashboard/subscription', icon: CreditCard },
-];
+const getNavItems = (role: string) => {
+  const base = [
+    { label: 'Dashboard',   href: '/dashboard',              icon: LayoutDashboard },
+    { label: 'Vehicles',    href: '/dashboard/vehicles',     icon: Car },
+    { label: 'Inspections', href: '/dashboard/inspections',  icon: ClipboardCheck },
+    { label: 'Fix Jobs',    href: '/dashboard/fix-jobs',     icon: Wrench },
+  ];
+ 
+  if (role === 'FIXER' || role === 'WORKSHOP_ADMIN') {
+    // Fixers: replace Subscription with Workshop
+    return [
+      ...base,
+      { label: 'Workshop',     href: '/dashboard/workshop',     icon: Building2 },
+    ];
+  }
+ 
+  if (role === 'OWNER') {
+    return [
+      ...base,
+      { label: 'Subscription', href: '/dashboard/subscription', icon: CreditCard },
+    ];
+  }
+ 
+  // ADMIN gets everything
+  return [
+    ...base,
+    { label: 'Workshop',     href: '/dashboard/workshop',     icon: Building2 },
+    { label: 'Subscription', href: '/dashboard/subscription', icon: CreditCard },
+  ];
+};
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, isAuthenticated, logout } = useAuth();
@@ -81,7 +105,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
+          {getNavItems(user?.role).map(({ label, href, icon: Icon }) => {
             const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
             return (
               <Link

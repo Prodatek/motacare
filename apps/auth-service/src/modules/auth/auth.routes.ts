@@ -195,6 +195,36 @@ export async function authRoutes(fastify: FastifyInstance) {
       return reply.status(200).send({ statusCode: 200, data: user });
     },
   );
+
+  // Called by workshop-service when a fixer is approved / leaves
+  
+  fastify.post(
+    '/internal/update-user-role',
+    { schema: { hide: true } },
+    async (request, reply) => {
+      const { userId, role, workshopId } = request.body as {
+        userId: string;
+        role: 'FIXER' | 'WORKSHOP_ADMIN';
+        workshopId: string | null;
+      };
+ 
+      const { eq } = await import('drizzle-orm');
+      const { db } = await import('../../db');
+      const { users } = await import('../../db/schema');
+ 
+      await db
+        .update(users)
+        .set({
+          role:        role as any,
+          workshopId:  workshopId,
+          updatedAt:   new Date(),
+        })
+        .where(eq(users.id, userId));
+ 
+      return reply.status(200).send({ statusCode: 200, message: 'Role updated' });
+    },
+  );
+
   // Internal: look up a user by ID (used by other services to display names)
   fastify.get(
     '/internal/user/:id',
