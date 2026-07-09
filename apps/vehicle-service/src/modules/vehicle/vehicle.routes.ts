@@ -62,6 +62,22 @@ export async function vehicleRoutes(fastify: FastifyInstance) {
   // INTERNAL ROUTE — called by inspection-service, not by clients
   // No auth here — only reachable within the Docker network
   // ----------------------------------------------------------
+  fastify.post('/internal/count', async (request, reply) => {
+    const { ownerId } = request.body as { ownerId: string };
+    if (!ownerId) return reply.status(400).send({ statusCode: 400, message: 'ownerId required' });
+ 
+    const { eq, and, count } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { vehicles } = await import('../../db/schema');
+ 
+    const [{ value }] = await db
+      .select({ value: count() })
+      .from(vehicles)
+      .where(and(eq(vehicles.ownerId, ownerId), eq(vehicles.status, 'ACTIVE')));
+ 
+    return reply.status(200).send({ statusCode: 200, data: { count: Number(value) } });
+  });
+
 
   fastify.get('/internal/lookup/:hash', {
     schema: { tags: ['Internal'], summary: 'Internal: look up vehicle by hash', hide: true } as any,

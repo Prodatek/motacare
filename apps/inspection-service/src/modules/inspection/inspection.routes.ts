@@ -145,4 +145,24 @@ export async function fixJobRoutes(fastify: FastifyInstance) {
     return reply.status(200).send({ statusCode: 200, data: { ...overall, byFixer } });
   });
 
+
+  fastify.post('/internal/count', async (request, reply) => {
+    const { ownerId, from } = request.body as { ownerId: string; from?: string };
+    if (!ownerId) return reply.status(400).send({ statusCode: 400, message: 'ownerId required' });
+ 
+    const { eq, and, count, gte } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { inspections } = await import('../../db/schema');
+ 
+    const conditions = [eq(inspections.ownerId, ownerId)];
+    if (from) conditions.push(gte(inspections.createdAt, new Date(from)));
+ 
+    const [{ value }] = await db
+      .select({ value: count() })
+      .from(inspections)
+      .where(and(...conditions));
+ 
+    return reply.status(200).send({ statusCode: 200, data: { count: Number(value) } });
+  });
+
 }
