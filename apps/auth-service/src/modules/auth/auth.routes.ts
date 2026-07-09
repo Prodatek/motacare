@@ -259,4 +259,48 @@ export async function authRoutes(fastify: FastifyInstance) {
       }
     },
   );
+  fastify.get('/auth/internal/users', async (request, reply) => {
+    const { page = '1', limit = '20', role, search, isActive, sort } = request.query as any;
+    const { eq, ilike, and, desc, asc, count, or } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { users } = await import('../../db/schema');
+ 
+    const conditions: any[] = [];
+    if (role)     conditions.push(eq(users.role, role));
+    if (isActive !== undefined) conditions.push(eq(users.isActive, isActive === 'true'));
+    if (search) conditions.push(or(
+      ilike(users.email, `%${search}%`),
+      ilike(users.firstName, `%${search}%`),
+      ilike(users.lastName, `%${search}%`),
+    ));
+ 
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const pageNum = Number(page);
+    const limitNum = Math.min(Number(limit), 100);
+    const offset = (pageNum - 1) * limitNum;
+ 
+    const [rows, [{ value: total }]] = await Promise.all([
+      db.select({
+        id: users.id, email: users.email, firstName: users.firstName,
+        lastName: users.lastName, role: users.role, isActive: users.isActive,
+        createdAt: users.createdAt, subscriptionTier: users.subscriptionTier,
+      }).from(users).where(where).orderBy(desc(users.createdAt)).limit(limitNum).offset(offset),
+      db.select({ value: count() }).from(users).where(where),
+    ]);
+ 
+    return reply.status(200).send({
+      statusCode: 200,
+      data: rows,
+      pagination: { total: Number(total), page: pageNum, limit: limitNum, totalPages: Math.ceil(Number(total) / limitNum) },
+    });
+  });
+
+   fastify.post('/auth/internal/set-user-active', async (request, reply) => {
+    const { userId, isActive } = request.body as { userId: string; isActive: boolean };
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { users } = await import('../../db/schema');
+    await db.update(users).set({ isActive, updatedAt: new Date() }).where(eq(users.id, userId));
+    return reply.status(200).send({ statusCode: 200, message: isActive ? 'User reactivated' : 'User suspended' });
+  });
 }

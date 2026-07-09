@@ -19,27 +19,33 @@ const getNavItems = (role: string) => {
     { label: 'Fix Jobs',    href: '/dashboard/fix-jobs',     icon: Wrench },
   ];
  
-  if (role === 'FIXER' || role === 'WORKSHOP_ADMIN') {
-    // Fixers: replace Subscription with Workshop
-    return [
-      ...base,
-      { label: 'Workshop',     href: '/dashboard/workshop',     icon: Building2 },
-    ];
-  }
- 
   if (role === 'OWNER') {
     return [
       ...base,
-      { label: 'Subscription', href: '/dashboard/subscription', icon: CreditCard },
+      { label: 'Service History', href: '/dashboard/owner/history',  icon: History },
+      { label: 'Subscription',    href: '/dashboard/subscription',   icon: CreditCard },
     ];
   }
  
-  // ADMIN gets everything
-  return [
-    ...base,
-    { label: 'Workshop',     href: '/dashboard/workshop',     icon: Building2 },
-    { label: 'Subscription', href: '/dashboard/subscription', icon: CreditCard },
-  ];
+  if (role === 'FIXER' || role === 'WORKSHOP_ADMIN') {
+    return [
+      ...base,
+      { label: 'Customers', href: '/dashboard/crm/customers', icon: Users },
+      { label: 'Workshop',  href: '/dashboard/workshop',      icon: Building2 },
+    ];
+  }
+ 
+  if (role === 'ADMIN') {
+    return [
+      ...base,
+      { label: 'Platform',  href: '/dashboard/admin/platform', icon: BarChart2 },
+      { label: 'Users',     href: '/dashboard/admin/users',    icon: Users },
+      { label: 'Workshops', href: '/dashboard/admin/workshops', icon: Building2 },
+      { label: 'Billing',   href: '/dashboard/admin/billing',  icon: CreditCard },
+    ];
+  }
+ 
+  return base;
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

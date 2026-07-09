@@ -15,7 +15,12 @@ import { registerFixJobsProxy } from './routes/fix-jobs.proxy';
 import { registerSubscriptionProxy } from './routes/subscription.proxy';
 import { registerWorkshopProxy } from './routes/workshop.proxy';
 import { buildRateLimitErrorResponse } from './middleware/rate-limit';
-
+import { registerAdminProxy }  from './routes/admin.proxy';
+import { registerCrmProxy }    from './routes/crm.proxy';
+ 
+await registerAdminProxy(fastify);
+await registerCrmProxy(fastify);
+ 
 export async function buildServer() {
   const fastify = Fastify({
     logger: {

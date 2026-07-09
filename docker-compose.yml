@@ -401,3 +401,40 @@ services:
       - motacare-network
     depends_on:
       - api-gateway
+
+
+
+  admin-service:
+    build: { context: ., dockerfile: infra/docker/admin-service.Dockerfile, target: development }
+    container_name: motacare-admin
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3009
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_SERVICE_URL: http://auth-service:3001
+      VEHICLE_SERVICE_URL: http://vehicle-service:3002
+      INSPECTION_SERVICE_URL: http://inspection-service:3003
+      FIX_JOBS_SERVICE_URL: http://fix-jobs:3004
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:3007
+      WORKSHOP_SERVICE_URL: http://workshop-service:3008
+    ports: ['3009:3009']
+    networks: [motacare-network]
+    depends_on: [postgres, auth-service]
+
+
+  crm-service:
+    build: { context: ., dockerfile: infra/docker/crm-service.Dockerfile, target: development }
+    container_name: motacare-crm
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3010
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_SERVICE_URL: http://auth-service:3001
+      POSTGRES_DB: motacare_crm
+      VEHICLE_SERVICE_URL: http://vehicle-service:3002
+      INSPECTION_SERVICE_URL: http://inspection-service:3003
+      FIX_JOBS_SERVICE_URL: http://fix-jobs:3004
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:3007
+      WORKSHOP_SERVICE_URL: http://workshop-service:3008

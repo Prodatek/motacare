@@ -130,4 +130,126 @@ export async function fixJobRoutes(fastify: FastifyInstance) {
     });
   });
 
+
+  // ============================================================
+//INTERNAL ROUTES (no JWT, internal Docker network only)
+//
+// These internal endpoints are called by crm-service and
+// admin-service. No JWT — internal Docker network only.
+// ============================================================
+
+  // ── GET UNIQUE CUSTOMERS FOR A FIXER ──────────────────────
+  // Returns aggregated customer list: unique ownerIds with
+  // total fix jobs, spend, and last visit date.
+  fastify.get('/fix-jobs/internal/customers', async (request, reply) => {
+    const { fixerId, limit = '20', sort = 'lastVisitAt:desc' } = request.query as any;
+    if (!fixerId) return reply.status(400).send({ statusCode: 400, message: 'fixerId required' });
+
+    const { eq, desc, sql, sum, count, max, min } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { fixJobs } = await import('../../db/schema');
+
+    const rows = await db
+      .select({
+        ownerId:      fixJobs.ownerId,
+        totalFixJobs: count(fixJobs.id),
+        totalRevenue: sql<number>`COALESCE(SUM(CASE WHEN ${fixJobs.status} = 'DELIVERED' THEN CAST(${fixJobs.finalCost} AS NUMERIC) ELSE 0 END), 0)`,
+        lastVisitAt:  sql<string>`MAX(${fixJobs.updatedAt})`,
+        firstVisitAt: sql<string>`MIN(${fixJobs.createdAt})`,
+        vehicleHashes: sql<string[]>`ARRAY_AGG(DISTINCT ${fixJobs.vehicleHash})`,
+      })
+      .from(fixJobs)
+      .where(eq(fixJobs.fixerId, fixerId))
+      .groupBy(fixJobs.ownerId)
+      .orderBy(sql`MAX(${fixJobs.updatedAt}) DESC`)
+      .limit(Number(limit));
+
+    return reply.status(200).send({
+      statusCode: 200,
+      data: { customers: rows.map((r) => ({
+        ownerId:      r.ownerId,
+        totalFixJobs: Number(r.totalFixJobs),
+        totalSpend:   Number(r.totalRevenue),
+        lastVisitAt:  r.lastVisitAt,
+        firstVisitAt: r.firstVisitAt,
+        vehicleHashes: r.vehicleHashes,
+      })) },
+    });
+  });
+
+  // ── GET FULL CUSTOMER HISTORY FOR A FIXER ─────────────────
+  // Used by crm-service to populate a customer's profile page.
+  fastify.post('/fix-jobs/internal/customer-history', async (request, reply) => {
+    const { fixerId, ownerId } = request.body as { fixerId: string; ownerId: string };
+    if (!fixerId || !ownerId) return reply.status(400).send({ statusCode: 400, message: 'fixerId and ownerId required' });
+
+    const { eq, and, desc, sql, count } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { fixJobs } = await import('../../db/schema');
+
+    const [stats, jobs] = await Promise.all([
+      db.select({
+        total:        count(fixJobs.id),
+        totalRevenue: sql<number>`COALESCE(SUM(CASE WHEN ${fixJobs.status} = 'DELIVERED' THEN CAST(${fixJobs.finalCost} AS NUMERIC) ELSE 0 END), 0)`,
+        lastVisitAt:  sql<string>`MAX(${fixJobs.updatedAt})`,
+        firstVisitAt: sql<string>`MIN(${fixJobs.createdAt})`,
+        vehicleHashes: sql<string[]>`ARRAY_AGG(DISTINCT ${fixJobs.vehicleHash})`,
+      })
+      .from(fixJobs)
+      .where(and(eq(fixJobs.fixerId, fixerId), eq(fixJobs.ownerId, ownerId))),
+
+      db.select()
+        .from(fixJobs)
+        .where(and(eq(fixJobs.fixerId, fixerId), eq(fixJobs.ownerId, ownerId)))
+        .orderBy(desc(fixJobs.createdAt))
+        .limit(50),
+    ]);
+
+    const [agg] = stats;
+
+    return reply.status(200).send({
+      statusCode: 200,
+      data: {
+        total:         Number(agg?.total ?? 0),
+        totalRevenue:  Number(agg?.totalRevenue ?? 0),
+        lastVisitAt:   agg?.lastVisitAt ?? null,
+        firstVisitAt:  agg?.firstVisitAt ?? null,
+        vehicleHashes: agg?.vehicleHashes ?? [],
+        jobs,
+      },
+    });
+  });
+
+  // ── PLATFORM STATS (admin-service) ────────────────────────
+  fastify.get('/fix-jobs/internal/stats', async (request, reply) => {
+    const { from } = request.query as { from?: string };
+
+    const { sql, gte, count } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const { fixJobs } = await import('../../db/schema');
+
+    const conditions: any[] = [];
+    if (from) conditions.push(gte(fixJobs.createdAt, new Date(from)));
+    const where = conditions.length > 0 ? conditions[0] : undefined;
+
+    const [allTime] = await db.select({ value: count() }).from(fixJobs);
+    const [periodStats] = await db.select({
+      total:        count(fixJobs.id),
+      completed:    sql<number>`SUM(CASE WHEN ${fixJobs.status} = 'COMPLETED' THEN 1 ELSE 0 END)`,
+      delivered:    sql<number>`SUM(CASE WHEN ${fixJobs.status} = 'DELIVERED' THEN 1 ELSE 0 END)`,
+      totalRevenue: sql<number>`COALESCE(SUM(CASE WHEN ${fixJobs.status} = 'DELIVERED' THEN CAST(${fixJobs.finalCost} AS NUMERIC) ELSE 0 END), 0)`,
+    }).from(fixJobs).where(where);
+
+    return reply.status(200).send({
+      statusCode: 200,
+      data: {
+        allTime:     Number(allTime?.value ?? 0),
+        total:       Number(periodStats?.total ?? 0),
+        completed:   Number(periodStats?.completed ?? 0),
+        delivered:   Number(periodStats?.delivered ?? 0),
+        totalRevenue: Number(periodStats?.totalRevenue ?? 0),
+      },
+    });
+  });
+
 }
