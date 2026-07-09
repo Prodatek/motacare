@@ -18,18 +18,15 @@ import { buildRateLimitErrorResponse } from './middleware/rate-limit';
 import { registerAdminProxy }  from './routes/admin.proxy';
 import { registerCrmProxy }    from './routes/crm.proxy';
  
-await registerAdminProxy(fastify);
-await registerCrmProxy(fastify);
- 
 export async function buildServer() {
   const fastify = Fastify({
     logger: {
       level: env.NODE_ENV === 'production' ? 'warn' : 'info',
       transport:
-        env.NODE_ENV === 'development'
+      env.NODE_ENV === 'development'
           ? { target: 'pino-pretty', options: { colorize: true } }
           : undefined,
-    },
+        },
     trustProxy: true,
     genReqId: () => crypto.randomUUID(),
   });
@@ -37,7 +34,7 @@ export async function buildServer() {
   // ── Security ─────────────────────────────────────────────
 
   await fastify.register(fastifyHelmet, { contentSecurityPolicy: false });
-
+  
   const origins = env.NODE_ENV === 'production'
     ? env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
     : true;
@@ -140,7 +137,10 @@ export async function buildServer() {
   await registerFixJobsProxy(fastify);
   await registerSubscriptionProxy(fastify);
   await registerWorkshopProxy(fastify);    
-
+  await registerAdminProxy(fastify);
+  await registerCrmProxy(fastify);
+   
+  
   // ── 404 handler ──────────────────────────────────────────
 
   fastify.setNotFoundHandler((_request, reply) => {

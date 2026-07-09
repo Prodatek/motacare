@@ -1,3 +1,7 @@
+import { FastifyInstance } from 'fastify';
+import { env } from '../config/env';
+import { proxyRequest } from './auth.proxy';
+
 export async function registerCrmProxy(fastify: FastifyInstance) {
   const up      = env.CRM_SERVICE_URL;
   const fixerAuth = { onRequest: [fastify.requireRole('FIXER', 'WORKSHOP_ADMIN', 'ADMIN')] };

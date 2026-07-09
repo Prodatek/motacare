@@ -1,3 +1,8 @@
+import { FastifyInstance } from 'fastify';
+import { env } from '../config/env';
+import { proxyRequest } from './auth.proxy';
+
+
 export async function registerAdminProxy(fastify: FastifyInstance) {
   const up = env.ADMIN_SERVICE_URL;
   const adminOnly = { onRequest: [fastify.requireRole('ADMIN')] };
