@@ -50,6 +50,6 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 motacare
 USER motacare
 
-EXPOSE 3004
+EXPOSE 3009
 
 CMD ["npm", "run", "dev", "--workspace=apps/admin-service"]
