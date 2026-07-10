@@ -345,14 +345,16 @@ export const fixJobApi = {
   get: (id: string) => request<FixJob>(`/fix-jobs/${id}`),
 
   createFixJob: (
-    inspectionId: string,
     payload: {
+      inspectionId: string;
+      vehicleHash?: string;
+      ownerId?: string;
       description: string;
       estimatedCompletionAt?: string;
       estimatedCost?: number;
       currency?: string;
     },
-  ) => request<FixJob>(`/inspections/${inspectionId}/fix-jobs`, {
+  ) => request<FixJob>('/fix-jobs', {
     method: 'POST',
     body: JSON.stringify(payload),
   }),

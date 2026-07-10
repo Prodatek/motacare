@@ -207,6 +207,8 @@ services:
       FIX_JOBS_SERVICE_URL: http://fix-jobs:3004
       SUBSCRIPTION_SERVICE_URL: http://subscription-service:3007
       WORKSHOP_SERVICE_URL: http://workshop-service:3008
+      ADMIN_SERVICE_URL:         http://admin-service:3009
+      CRM_SERVICE_URL:           http://crm-service:3010
     ports:
       - '3000:3000'
     volumes:

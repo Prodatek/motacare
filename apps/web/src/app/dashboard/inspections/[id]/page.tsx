@@ -107,6 +107,9 @@ function CreateFixJobModal({
     setIsSubmitting(true);
     try {
       const job = await fixJobApi.createFixJob(inspection.id, {
+        inspectionId: inspection.id,
+        vehicleHash: inspection.vehicleHash,
+        ownerId: inspection.ownerId,
         description: description.trim(),
         ...(estimatedDate ? { estimatedCompletionAt: new Date(estimatedDate).toISOString() } : {}),
         ...(estimatedCost ? { estimatedCost: Number(estimatedCost) } : {}),

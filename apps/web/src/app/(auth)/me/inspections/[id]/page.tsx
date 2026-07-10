@@ -367,6 +367,9 @@ export default function InspectionDetailPage() {
                   setIsCreatingJob(true);
                   try {
                     const payload = {
+                      inspectionId: inspection.id,
+                      vehicleHash: inspection.vehicleHash,
+                      ownerId: inspection.ownerId,
                       description: jobDescription,
                       estimatedCompletionAt: jobEstimatedCompletionAt || undefined,
                       estimatedCost: jobEstimatedCost ? Number(jobEstimatedCost) : undefined,
