@@ -228,6 +228,10 @@ services:
         condition: service_started
       subscription-service:
         condition: service_started
+      admin-service:
+        condition: service_started
+      crm-service:
+        condition: service_started
   
   fix-jobs:
     build:
@@ -379,7 +383,78 @@ services:
       auth-service:
         condition: service_started
   
-  
+  admin-service:
+    build:
+      context: .
+      dockerfile: infra/docker/admin-service.Dockerfile
+      target: development
+    container_name: motacare-admin
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3009
+      JWT_SECRET: ${JWT_SECRET}
+      # Admin service has NO database — it calls other services internally
+      AUTH_SERVICE_URL:         http://auth-service:3001
+      VEHICLE_SERVICE_URL:      http://vehicle-service:3002
+      INSPECTION_SERVICE_URL:   http://inspection-service:3003
+      FIX_JOBS_SERVICE_URL:     http://fix-jobs:3004
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:3007
+      WORKSHOP_SERVICE_URL:     http://workshop-service:3008
+    ports:
+      - '3009:3009'
+    volumes:
+      - ./apps/admin-service:/app/apps/admin-service
+      - ./packages:/app/packages
+      - /app/node_modules
+      - /app/apps/admin-service/node_modules
+    networks:
+      - motacare-network
+    depends_on:
+      auth-service:
+        condition: service_started
+      subscription-service:
+        condition: service_started
+      workshop-service:
+        condition: service_started
+ 
+  # ── CRM Service ─────────────────────────────────────────────
+  crm-service:
+    build:
+      context: .
+      dockerfile: infra/docker/crm-service.Dockerfile
+      target: development
+    container_name: motacare-crm
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3010
+      JWT_SECRET: ${JWT_SECRET}
+      POSTGRES_HOST:     postgres
+      POSTGRES_PORT:     5432
+      POSTGRES_USER:     ${POSTGRES_USER:-motacare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-motacare_dev_password}
+      POSTGRES_DB:       ${CRM_DB_NAME:-motacare_crm}
+      AUTH_SERVICE_URL:       http://auth-service:3001
+      VEHICLE_SERVICE_URL:    http://vehicle-service:3002
+      INSPECTION_SERVICE_URL: http://inspection-service:3003
+      FIX_JOBS_SERVICE_URL:   http://fix-jobs:3004
+    ports:
+      - '3010:3010'
+    volumes:
+      - ./apps/crm-service:/app/apps/crm-service
+      - ./packages:/app/packages
+      - /app/node_modules
+      - /app/apps/crm-service/node_modules
+    networks:
+      - motacare-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      fix-jobs:
+        condition: service_started
   web:
     build:
       context: .
@@ -401,40 +476,3 @@ services:
       - motacare-network
     depends_on:
       - api-gateway
-
-
-
-  admin-service:
-    build: { context: ., dockerfile: infra/docker/admin-service.Dockerfile, target: development }
-    container_name: motacare-admin
-    restart: unless-stopped
-    environment:
-      NODE_ENV: development
-      PORT: 3009
-      JWT_SECRET: ${JWT_SECRET}
-      AUTH_SERVICE_URL: http://auth-service:3001
-      VEHICLE_SERVICE_URL: http://vehicle-service:3002
-      INSPECTION_SERVICE_URL: http://inspection-service:3003
-      FIX_JOBS_SERVICE_URL: http://fix-jobs:3004
-      SUBSCRIPTION_SERVICE_URL: http://subscription-service:3007
-      WORKSHOP_SERVICE_URL: http://workshop-service:3008
-    ports: ['3009:3009']
-    networks: [motacare-network]
-    depends_on: [postgres, auth-service]
-
-
-  crm-service:
-    build: { context: ., dockerfile: infra/docker/crm-service.Dockerfile, target: development }
-    container_name: motacare-crm
-    restart: unless-stopped
-    environment:
-      NODE_ENV: development
-      PORT: 3010
-      JWT_SECRET: ${JWT_SECRET}
-      AUTH_SERVICE_URL: http://auth-service:3001
-      POSTGRES_DB: motacare_crm
-      VEHICLE_SERVICE_URL: http://vehicle-service:3002
-      INSPECTION_SERVICE_URL: http://inspection-service:3003
-      FIX_JOBS_SERVICE_URL: http://fix-jobs:3004
-      SUBSCRIPTION_SERVICE_URL: http://subscription-service:3007
-      WORKSHOP_SERVICE_URL: http://workshop-service:3008
