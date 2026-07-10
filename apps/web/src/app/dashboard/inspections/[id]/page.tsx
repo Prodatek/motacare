@@ -106,6 +106,11 @@ function CreateFixJobModal({
     if (!description.trim()) { toast.error('Description is required'); return; }
     setIsSubmitting(true);
     try {
+      if (!inspection?.id || !inspection?.vehicleHash || !inspection?.ownerId) {
+        toast.error('This inspection is missing required information for creating a fix job.');
+        return;
+      }
+
       const job = await fixJobApi.createFixJob(inspection.id, {
         inspectionId: inspection.id,
         vehicleHash: inspection.vehicleHash,

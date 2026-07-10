@@ -366,6 +366,11 @@ export default function InspectionDetailPage() {
                   }
                   setIsCreatingJob(true);
                   try {
+                    if (!inspection?.id || !inspection?.vehicleHash || !inspection?.ownerId) {
+                      toast.error('This inspection is missing required information for creating a fix job.');
+                      return;
+                    }
+
                     const payload = {
                       inspectionId: inspection.id,
                       vehicleHash: inspection.vehicleHash,

@@ -303,7 +303,7 @@ export const inspectionApi = {
 
   createFixJob: (
     inspectionIdOrPayload: string | {
-      inspectionId: string;
+      inspectionId?: string;
       vehicleHash?: string;
       ownerId?: string;
       description: string;
@@ -312,22 +312,22 @@ export const inspectionApi = {
       currency?: string;
     },
     payload?: {
+      inspectionId?: string;
+      vehicleHash?: string;
+      ownerId?: string;
       description: string;
       estimatedCompletionAt?: string;
       estimatedCost?: number;
       currency?: string;
     },
   ) => {
-    const inspectionId = typeof inspectionIdOrPayload === 'string'
-      ? inspectionIdOrPayload
-      : inspectionIdOrPayload.inspectionId;
-    const bodyPayload = typeof inspectionIdOrPayload === 'string'
-      ? payload
+    const normalizedPayload = typeof inspectionIdOrPayload === 'string'
+      ? { ...(payload ?? {}), inspectionId: inspectionIdOrPayload }
       : inspectionIdOrPayload;
 
-    return request<FixJob>(`/inspections/${inspectionId}/fix-jobs`, {
+    return request<FixJob>('/fix-jobs', {
       method: 'POST',
-      body: JSON.stringify(bodyPayload),
+      body: JSON.stringify(normalizedPayload),
     });
   },
 };
@@ -345,8 +345,8 @@ export const fixJobApi = {
   get: (id: string) => request<FixJob>(`/fix-jobs/${id}`),
 
   createFixJob: (
-    payload: {
-      inspectionId: string;
+    inspectionIdOrPayload: string | {
+      inspectionId?: string;
       vehicleHash?: string;
       ownerId?: string;
       description: string;
@@ -354,10 +354,25 @@ export const fixJobApi = {
       estimatedCost?: number;
       currency?: string;
     },
-  ) => request<FixJob>('/fix-jobs', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  }),
+    payload?: {
+      inspectionId?: string;
+      vehicleHash?: string;
+      ownerId?: string;
+      description: string;
+      estimatedCompletionAt?: string;
+      estimatedCost?: number;
+      currency?: string;
+    },
+  ) => {
+    const normalizedPayload = typeof inspectionIdOrPayload === 'string'
+      ? { ...(payload ?? {}), inspectionId: inspectionIdOrPayload }
+      : inspectionIdOrPayload;
+
+    return request<FixJob>('/fix-jobs', {
+      method: 'POST',
+      body: JSON.stringify(normalizedPayload),
+    });
+  },
 
   update: (id: string, payload: {
     status?: string;
