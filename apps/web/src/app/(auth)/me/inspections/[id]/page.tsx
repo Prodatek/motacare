@@ -367,15 +367,12 @@ export default function InspectionDetailPage() {
                   setIsCreatingJob(true);
                   try {
                     const payload = {
-                      inspectionId: inspection.id,
-                      vehicleHash: inspection.vehicleHash,
-                      ownerId: inspection.ownerId,
                       description: jobDescription,
                       estimatedCompletionAt: jobEstimatedCompletionAt || undefined,
                       estimatedCost: jobEstimatedCost ? Number(jobEstimatedCost) : undefined,
                       currency: jobCurrency,
                     };
-                    const job = await fixJobApi.createFixJob(payload);
+                    const job = await fixJobApi.createFixJob(inspection.id, payload);
                     toast.success('Fix job created');
                     router.push(`/dashboard/fix-jobs/${job.id}`);
                   } catch (err) {

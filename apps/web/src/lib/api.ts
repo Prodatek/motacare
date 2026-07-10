@@ -277,7 +277,7 @@ export const inspectionApi = {
       }),
     }),
 
-  list: (params?: { page?: number; status?: string; vehicleHash?: string }) => {
+  list: (params?: { page?: number; limit?: number; status?: string; vehicleHash?: string }) => {
     const query = new URLSearchParams(params as any).toString();
     return request<PaginatedResponse<Inspection>>(`/inspections${query ? `?${query}` : ''}`);
   },
@@ -301,15 +301,35 @@ export const inspectionApi = {
       body: JSON.stringify({ outcome, summary }),
     }),
 
-  createFixJob: (inspectionId: string, payload: {
-    description: string;
-    estimatedCompletionAt?: string;
-    estimatedCost?: number;
-  }) =>
-    request<FixJob>(`/inspections/${inspectionId}/fix-jobs`, {
+  createFixJob: (
+    inspectionIdOrPayload: string | {
+      inspectionId: string;
+      vehicleHash?: string;
+      ownerId?: string;
+      description: string;
+      estimatedCompletionAt?: string;
+      estimatedCost?: number;
+      currency?: string;
+    },
+    payload?: {
+      description: string;
+      estimatedCompletionAt?: string;
+      estimatedCost?: number;
+      currency?: string;
+    },
+  ) => {
+    const inspectionId = typeof inspectionIdOrPayload === 'string'
+      ? inspectionIdOrPayload
+      : inspectionIdOrPayload.inspectionId;
+    const bodyPayload = typeof inspectionIdOrPayload === 'string'
+      ? payload
+      : inspectionIdOrPayload;
+
+    return request<FixJob>(`/inspections/${inspectionId}/fix-jobs`, {
       method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+      body: JSON.stringify(bodyPayload),
+    });
+  },
 };
 
 // ============================================================
@@ -317,12 +337,25 @@ export const inspectionApi = {
 // ============================================================
 
 export const fixJobApi = {
-  list: (params?: { page?: number; status?: string }) => {
+  list: (params?: { page?: number; limit?: number; status?: string }) => {
     const query = new URLSearchParams(params as any).toString();
     return request<PaginatedResponse<FixJob>>(`/fix-jobs${query ? `?${query}` : ''}`);
   },
 
   get: (id: string) => request<FixJob>(`/fix-jobs/${id}`),
+
+  createFixJob: (
+    inspectionId: string,
+    payload: {
+      description: string;
+      estimatedCompletionAt?: string;
+      estimatedCost?: number;
+      currency?: string;
+    },
+  ) => request<FixJob>(`/inspections/${inspectionId}/fix-jobs`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
 
   update: (id: string, payload: {
     status?: string;

@@ -106,10 +106,7 @@ function CreateFixJobModal({
     if (!description.trim()) { toast.error('Description is required'); return; }
     setIsSubmitting(true);
     try {
-      const job = await fixJobApi.createFixJob({
-        inspectionId: inspection.id,
-        vehicleHash: inspection.vehicleHash,
-        ownerId: inspection.ownerId,
+      const job = await fixJobApi.createFixJob(inspection.id, {
         description: description.trim(),
         ...(estimatedDate ? { estimatedCompletionAt: new Date(estimatedDate).toISOString() } : {}),
         ...(estimatedCost ? { estimatedCost: Number(estimatedCost) } : {}),
