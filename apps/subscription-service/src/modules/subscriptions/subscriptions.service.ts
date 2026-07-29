@@ -142,7 +142,7 @@ export class SubscriptionService {
         .where(eq(subscriptions.userId, userId));
     }
 
-    const session = await getStripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],

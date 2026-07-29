@@ -86,7 +86,7 @@ info "Step 4/6 — Deploying application services..."
 # Update image tags if IMAGE_TAG is not 'latest'
 if [ "$IMAGE_TAG" != "latest" ]; then
   info "Setting image tag to $IMAGE_TAG for all deployments..."
-  SERVICES=(auth-service vehicle-service inspection-service fix-jobs alert-service subscription-service api-gateway web)
+  SERVICES=(auth-service vehicle-service inspection-service fix-jobs alert-service subscription-service invoicing-service api-gateway web)
   for svc in "${SERVICES[@]}"; do
     IMAGE_NAME="${REGISTRY}/${svc}:${IMAGE_TAG}"
     kubectl set image deployment/$svc $svc=$IMAGE_NAME -n $NAMESPACE 2>/dev/null || true
@@ -111,7 +111,7 @@ success "Ingress applied"
 # ── Wait for all deployments to roll out ────────────────────
 echo ""
 info "Waiting for all deployments to roll out..."
-DEPLOYMENTS=(auth-service vehicle-service inspection-service fix-jobs alert-service subscription-service api-gateway web)
+DEPLOYMENTS=(auth-service vehicle-service inspection-service fix-jobs alert-service subscription-service invoicing-service api-gateway web)
 FAILED=0
 
 for deployment in "${DEPLOYMENTS[@]}"; do

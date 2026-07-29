@@ -14,8 +14,8 @@ import { CrmController } from './customers.controller';
 export async function crmRoutes(fastify: FastifyInstance) {
   const service    = new CrmService();
   const ctrl       = new CrmController(service);
-  const auth       = { onRequest: [fastify.authenticate] };
-  const tag        = { schema: { tags: ['CRM'], security: [{ bearerAuth: [] }] } };
+  const auth       = { onRequest: [(fastify as any).authenticate] };
+  const tag: any   = { schema: { tags: ['CRM'], security: [{ bearerAuth: [] }] } };
 
   // ── Customer list & recent ─────────────────────────────────
   fastify.get('/customers',        { ...auth, ...tag }, (req, rep) => ctrl.listCustomers(req, rep));

@@ -23,6 +23,8 @@ const envSchema = z.object({
  
   // Internal service URLs
   AUTH_SERVICE_URL: z.string().url().default('http://localhost:3001'),
+  VEHICLE_SERVICE_URL: z.string().url().default('http://localhost:3002'),
+  INSPECTION_SERVICE_URL: z.string().url().default('http://localhost:3003'),
  
   // App URL — used in Stripe redirect URLs
   APP_URL: z.string().url().default('http://localhost:3005'),

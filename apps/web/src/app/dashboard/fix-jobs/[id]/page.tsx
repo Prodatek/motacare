@@ -19,6 +19,12 @@ type FixJobWithHistory = FixJob & {
     notes: string | null;
     changedAt: string;
   }>;
+  // Not currently populated by fix-jobs.service.ts's getFixJob() — the
+  // backend only returns raw fixerId/vehicleId. Declared optional here
+  // so the already-defensive `job.fixer &&` / `job.vehicle &&` guards
+  // below type-check honestly if/when the backend adds enrichment.
+  fixer?: { firstName: string; lastName: string } | null;
+  vehicle?: { make: string; model: string; year: number } | null;
 };
 
 // Valid transitions map (mirrors the backend)

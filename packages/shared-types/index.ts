@@ -60,6 +60,7 @@ export interface JwtPayload {
 
 export type FuelType = 'PETROL' | 'DIESEL' | 'ELECTRIC' | 'HYBRID' | 'CNG' | 'LPG';
 export type TransmissionType = 'MANUAL' | 'AUTOMATIC' | 'CVT';
+export type VehicleStatus = 'ACTIVE' | 'INACTIVE' | 'TRANSFERRED';
 
 export interface Vehicle {
   id: string;
@@ -70,12 +71,14 @@ export interface Vehicle {
   model: string;            // e.g. Camry
   year: number;
   color?: string | null;
+  trim?: string | null;      // e.g. "LE", "Sport"
   fuelType: FuelType;
   transmissionType: TransmissionType;
   engineCapacity?: string | null;  // e.g. "2.0L"
+  engineCode?: string | null;
   licensePlate: string;
   mileageAtRegistration: number;
-  isActive: boolean;
+  status: VehicleStatus;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -137,6 +140,7 @@ export interface FixJob {
   actualCompletionAt?: Date | null;
   estimatedCost?: number | null;
   finalCost?: number | null;
+  currency: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -244,4 +248,147 @@ export interface WorkshopStats {
     fixJobs: number;
     revenue: number;
   }>;
+}
+
+// ============================================================
+// INVOICING TYPES
+// Quotes, invoices, the reusable per-workshop line-item catalog,
+// manual payment records, and financial reports. Owned by
+// apps/invoicing-service.
+// ============================================================
+
+export type CatalogItemKind = 'PART' | 'LABOR' | 'MISC';
+export type QuoteStatus     = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
+export type InvoiceStatus   = 'DRAFT' | 'SENT' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE' | 'VOID';
+export type PaymentMethod   = 'CASH' | 'BANK_TRANSFER' | 'MOBILE_MONEY' | 'CARD' | 'CHEQUE' | 'OTHER';
+
+export interface CatalogItem {
+  id: string;
+  workshopId: string;
+  description: string;
+  kind: CatalogItemKind;
+  category?: string | null;
+  defaultUnit: string;
+  defaultUnitPrice: number;
+  currency: string;
+  usageCount: number;
+  lastUsedAt?: Date | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface DocumentLineItem {
+  id: string;
+  catalogItemId?: string | null;
+  description: string;
+  kind?: CatalogItemKind | null;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  lineTotal: number;
+  sortOrder: number;
+}
+
+export interface Quote {
+  id: string;
+  workshopId: string;
+  createdBy: string;
+  quoteNumber: string;
+  status: QuoteStatus;
+  customerName: string;
+  customerContact: string;
+  customerAddress?: string | null;
+  ownerId?: string | null;
+  vehicleHash?: string | null;
+  vehicleDescription?: string | null;
+  inspectionId?: string | null;
+  fixJobId?: string | null;
+  currency: string;
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  discountAmount: number;
+  total: number;
+  notes?: string | null;
+  validUntil?: Date | null;
+  sentAt?: Date | null;
+  respondedAt?: Date | null;
+  rejectionReason?: string | null;
+  convertedInvoiceId?: string | null;
+  convertedAt?: Date | null;
+  lineItems: DocumentLineItem[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Invoice {
+  id: string;
+  workshopId: string;
+  createdBy: string;
+  invoiceNumber: string;
+  status: InvoiceStatus;
+  sourceQuoteId?: string | null;
+  customerName: string;
+  customerContact: string;
+  customerAddress?: string | null;
+  ownerId?: string | null;
+  vehicleHash?: string | null;
+  vehicleDescription?: string | null;
+  inspectionId?: string | null;
+  fixJobId?: string | null;
+  currency: string;
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  discountAmount: number;
+  total: number;
+  amountPaid: number;
+  amountDue: number;
+  issueDate: Date;
+  dueDate?: Date | null;
+  sentAt?: Date | null;
+  paidAt?: Date | null;
+  voidedAt?: Date | null;
+  voidReason?: string | null;
+  notes?: string | null;
+  lineItems: DocumentLineItem[];
+  payments?: Payment[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Payment {
+  id: string;
+  invoiceId: string;
+  workshopId: string;
+  amount: number;
+  method: PaymentMethod;
+  paidAt: Date;
+  reference?: string | null;
+  note?: string | null;
+  recordedBy: string;
+  createdAt: Date;
+}
+
+export interface FinancialSummary {
+  period: { from: string; to: string };
+  totalInvoiced: number;
+  totalCollected: number;
+  outstanding: number;
+  overdue: number;
+  conversionRate: number;
+}
+
+export interface FinancialTrendPoint {
+  month: string;
+  invoiced: number;
+  collected: number;
+}
+
+export interface TopCustomer {
+  ownerId: string | null;
+  customerName: string;
+  totalSpend: number;
+  invoiceCount: number;
 }

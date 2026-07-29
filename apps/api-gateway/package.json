@@ -21,7 +21,7 @@
     "@motacare/shared-types": "*",
     "@motacare/shared-utils": "*",
     "fastify": "^4.27.0",
-    "zod": "^4.4.3"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "pino-pretty": "^11.0.0",

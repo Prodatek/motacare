@@ -48,6 +48,17 @@ export function statusColour(status: string): string {
     case 'PENDING':     return 'text-gray-700 bg-gray-100';
     case 'AWAITING_PARTS': return 'text-orange-700 bg-orange-50';
     case 'CANCELLED':   return 'text-red-700 bg-red-50';
+    // Quote statuses
+    case 'DRAFT':          return 'text-gray-700 bg-gray-100';
+    case 'SENT':            return 'text-blue-700 bg-blue-50';
+    case 'ACCEPTED':        return 'text-green-700 bg-green-50';
+    case 'REJECTED':        return 'text-red-700 bg-red-50';
+    case 'EXPIRED':          return 'text-gray-500 bg-gray-50';
+    // Invoice statuses
+    case 'PARTIALLY_PAID': return 'text-amber-700 bg-amber-50';
+    case 'PAID':            return 'text-green-700 bg-green-50';
+    case 'OVERDUE':          return 'text-red-700 bg-red-50';
+    case 'VOID':             return 'text-gray-500 bg-gray-50';
     default:            return 'text-gray-700 bg-gray-100';
   }
 }

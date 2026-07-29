@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const tokens = await authApi.refresh();
+      const tokens = await authApi.refresh(refreshToken);
       setAccessToken(tokens.accessToken);
       saveRefreshToken(tokens.refreshToken);
       document.cookie = 'mc_session=1; path=/; max-age=604800; SameSite=Lax';

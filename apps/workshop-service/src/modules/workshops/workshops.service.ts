@@ -272,8 +272,8 @@ export class WorkshopService {
         totalFixJobs:       289,
         logoUrl:            null,
         coverImageUrl:      null,
-        createdAt:          new Date('2023-01-15').toISOString(),
-        updatedAt:          new Date().toISOString(),
+        createdAt:          new Date('2023-01-15'),
+        updatedAt:          new Date(),
         isSeeded:           true,
       },
       {
@@ -296,8 +296,8 @@ export class WorkshopService {
         totalFixJobs:       175,
         logoUrl:            null,
         coverImageUrl:      null,
-        createdAt:          new Date('2023-03-10').toISOString(),
-        updatedAt:          new Date().toISOString(),
+        createdAt:          new Date('2023-03-10'),
+        updatedAt:          new Date(),
         isSeeded:           true,
       },
       {
@@ -320,8 +320,8 @@ export class WorkshopService {
         totalFixJobs:       391,
         logoUrl:            null,
         coverImageUrl:      null,
-        createdAt:          new Date('2022-11-20').toISOString(),
-        updatedAt:          new Date().toISOString(),
+        createdAt:          new Date('2022-11-20'),
+        updatedAt:          new Date(),
         isSeeded:           true,
       },
     ];

@@ -21,6 +21,9 @@ CREATE DATABASE motacare_workshops;
 -- Phase 4
 CREATE DATABASE motacare_crm;
 
+-- Phase 5
+CREATE DATABASE motacare_invoicing;
+
 -- Grant all privileges to the app user
 GRANT ALL PRIVILEGES ON DATABASE motacare_auth          TO motacare;
 GRANT ALL PRIVILEGES ON DATABASE motacare_vehicles      TO motacare;
@@ -29,3 +32,4 @@ GRANT ALL PRIVILEGES ON DATABASE motacare_fixjobs       TO motacare;
 GRANT ALL PRIVILEGES ON DATABASE motacare_subscriptions TO motacare;
 GRANT ALL PRIVILEGES ON DATABASE motacare_workshops     TO motacare;
 GRANT ALL PRIVILEGES ON DATABASE motacare_crm           TO motacare;
+GRANT ALL PRIVILEGES ON DATABASE motacare_invoicing     TO motacare;

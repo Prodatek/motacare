@@ -30,7 +30,7 @@ export default function RegisterVehiclePage() {
   const router = useRouter();
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { fuelType: 'PETROL', transmissionType: 'MANUAL', mileageAtRegistration: 0, trim: '', engineCode: '' },
+    defaultValues: { fuelType: 'PETROL', transmissionType: 'MANUAL', mileageAtRegistration: 0 },
   });
 
   const onSubmit = async (data: FormData) => {

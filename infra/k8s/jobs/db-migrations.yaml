@@ -100,6 +100,21 @@ spec:
                   name: motacare-config
                   key: SUBSCRIPTION_DB_NAME
 
+        - name: migrate-invoicing
+          image: ghcr.io/Prodatek/motacare/invoicing-service:latest
+          command: ["node", "dist/db/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: motacare-config
+            - secretRef:
+                name: motacare-secrets
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: motacare-config
+                  key: INVOICING_DB_NAME
+
       # The main container just exits 0 once all initContainers succeed
       containers:
         - name: done

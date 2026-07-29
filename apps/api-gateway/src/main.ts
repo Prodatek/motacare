@@ -17,6 +17,7 @@ import { registerWorkshopProxy } from './routes/workshop.proxy';
 import { buildRateLimitErrorResponse } from './middleware/rate-limit';
 import { registerAdminProxy }  from './routes/admin.proxy';
 import { registerCrmProxy }    from './routes/crm.proxy';
+import { registerInvoicingProxy } from './routes/invoicing.proxy';
  
 export async function buildServer() {
   const fastify = Fastify({
@@ -81,6 +82,7 @@ export async function buildServer() {
           { name: 'Fix Jobs',      description: 'Fix job lifecycle management' },
           { name: 'Subscriptions', description: 'Plan management and billing' },
           { name: 'Workshops',     description: 'Workshop profiles and membership' },
+          { name: 'Invoicing',     description: 'Quotes, invoices, catalog, payments, and financial reports' },
         ],
       },
     });
@@ -107,6 +109,7 @@ export async function buildServer() {
       fetch(`${env.FIX_JOBS_SERVICE_URL}/health`).then((r) => ({ service: 'fix-jobs', ok: r.ok })),
       fetch(`${env.SUBSCRIPTION_SERVICE_URL}/health`).then((r) => ({ service: 'subscription', ok: r.ok })),
       fetch(`${env.WORKSHOP_SERVICE_URL}/health`).then((r) => ({ service: 'workshop', ok: r.ok })),
+      fetch(`${env.INVOICING_SERVICE_URL}/health`).then((r) => ({ service: 'invoicing', ok: r.ok })),
     ]);
 
     const results = checks.map((c) =>
@@ -139,6 +142,7 @@ export async function buildServer() {
   await registerWorkshopProxy(fastify);    
   await registerAdminProxy(fastify);
   await registerCrmProxy(fastify);
+  await registerInvoicingProxy(fastify);
    
   
   // ── 404 handler ──────────────────────────────────────────

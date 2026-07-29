@@ -24,6 +24,7 @@ const envSchema = z.object({
   WORKSHOP_SERVICE_URL:     z.string().url().default('http://localhost:3008'),
   ADMIN_SERVICE_URL: z.string().url().default('http://localhost:3009'),
   CRM_SERVICE_URL:   z.string().url().default('http://localhost:3010'),
+  INVOICING_SERVICE_URL: z.string().url().default('http://localhost:3011'),
   // ── CORS ────────────────────────────────────────────────
   ALLOWED_ORIGINS: z.string().default('http://localhost:3005'),
  

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { vehicleApi, fixJobApi } from '@/lib/api';
-import type { Vehicle, FixJob } from '@/lib/api';
+import type { Vehicle, FixJob } from '@motacare/shared-types';
 import { formatDate, formatCurrency, statusColour, cn } from '@/lib/utils';
 
 interface VehicleSummary {

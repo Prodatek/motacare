@@ -7,6 +7,17 @@ import type {
   Inspection,
   FixJob,
   PaginatedResponse,
+  CatalogItem,
+  CatalogItemKind,
+  Quote,
+  QuoteStatus,
+  Invoice,
+  InvoiceStatus,
+  Payment,
+  PaymentMethod,
+  FinancialSummary,
+  FinancialTrendPoint,
+  TopCustomer,
 } from '@motacare/shared-types';
 
 // ============================================================
@@ -212,6 +223,12 @@ export const authApi = {
       body: JSON.stringify({ refreshToken }),
     }),
 
+  refresh: (refreshToken: string) =>
+    request<TokenPair>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken }),
+    }),
+
   me: () => request<BaseUser>('/auth/me'),
 };
 
@@ -337,7 +354,7 @@ export const inspectionApi = {
 // ============================================================
 
 export const fixJobApi = {
-  list: (params?: { page?: number; limit?: number; status?: string }) => {
+  list: (params?: { page?: number; limit?: number; status?: string; statuses?: string[]; vehicleHash?: string }) => {
     const query = new URLSearchParams(params as any).toString();
     return request<PaginatedResponse<FixJob>>(`/fix-jobs${query ? `?${query}` : ''}`);
   },
@@ -387,6 +404,79 @@ export const fixJobApi = {
 };
 
 // ============================================================
+// SUBSCRIPTION API
+// ============================================================
+
+export type SubscriptionTier = 'FREE' | 'PRO' | 'WORKSHOP';
+export type BillingInterval = 'MONTHLY' | 'YEARLY';
+export type SubscriptionStatus = 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'EXPIRED' | 'TRIALING';
+
+export interface PlanDetails {
+  name: string;
+  description: string;
+  price: { monthly: number; yearly: number };
+  features: {
+    vehiclesAllowed: number;
+    inspectionsPerMonth: number;
+    fixersAllowed: number;
+    canExportReports: boolean;
+    canAccessObd: boolean;
+    canAccessAiSummary: boolean;
+  };
+}
+
+export type PlansResponse = Record<SubscriptionTier, PlanDetails>;
+
+export interface Subscription {
+  id: string;
+  userId: string;
+  tier: SubscriptionTier;
+  status: SubscriptionStatus;
+  billingInterval: BillingInterval | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  trialEndsAt: string | null;
+  vehiclesAllowed: number;
+  inspectionsPerMonth: number;
+  fixersAllowed: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UsageSnapshot {
+  vehicles: number;
+  inspectionsThisMonth: number;
+  fixers: number;
+  updatedAt: string;
+}
+
+export const subscriptionApi = {
+  getPlans: () => request<PlansResponse>('/subscriptions/plans'),
+
+  getMySubscription: () => request<Subscription>('/subscriptions/me'),
+
+  getUsage: () => request<UsageSnapshot>('/subscriptions/usage'),
+
+  createCheckout: (tier: 'PRO' | 'WORKSHOP', billingInterval: BillingInterval) =>
+    request<{ url: string }>('/subscriptions/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ tier, billingInterval }),
+    }),
+
+  createPortalSession: (returnUrl?: string) =>
+    request<{ url: string }>('/subscriptions/portal', {
+      method: 'POST',
+      body: JSON.stringify({ returnUrl }),
+    }),
+
+  cancel: (immediately = false) =>
+    request<Subscription>('/subscriptions/cancel', {
+      method: 'POST',
+      body: JSON.stringify({ immediately }),
+    }),
+};
+
+// ============================================================
 // WORKSHOP API
 // ============================================================
 
@@ -429,6 +519,7 @@ export interface WorkshopMember {
 export interface WorkshopStats {
   workshopId: string;
   period: { from: string; to: string };
+  viewCount: number;
   totalInspections: number;
   completedInspections: number;
   totalFixJobs: number;
@@ -653,4 +744,180 @@ export const crmApi = {
  
   getRecentCustomers: (limit = 5) =>
     request<CrmCustomer[]>(`/crm/customers/recent?limit=${limit}`),
+};
+
+// ============================================================
+// INVOICING API
+// Quotes, invoices, the reusable line-item catalog, manual
+// payment records, and financial reports.
+// ============================================================
+
+function toQs(params?: Record<string, unknown>): string {
+  if (!params) return '';
+  const q = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== '')) as any,
+  ).toString();
+  return q ? `?${q}` : '';
+}
+
+export interface LineItemInput {
+  catalogItemId?: string;
+  description: string;
+  kind?: CatalogItemKind;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+}
+
+export interface QuoteInput {
+  customerName: string;
+  customerContact: string;
+  customerAddress?: string;
+  ownerId?: string;
+  vehicleHash?: string;
+  vehicleDescription?: string;
+  currency?: string;
+  taxRate?: number;
+  discountAmount?: number;
+  notes?: string;
+  validUntil?: string;
+  lineItems: LineItemInput[];
+}
+
+export interface InvoiceInput {
+  customerName: string;
+  customerContact: string;
+  customerAddress?: string;
+  ownerId?: string;
+  vehicleHash?: string;
+  vehicleDescription?: string;
+  currency?: string;
+  taxRate?: number;
+  discountAmount?: number;
+  notes?: string;
+  dueDate?: string;
+  lineItems: LineItemInput[];
+}
+
+// PDF endpoints return a binary body — request<T>() always calls
+// .json()/.text(), so this bypasses it and does its own fetch +
+// blob handling, downloading the file via an object URL.
+async function downloadPdf(path: string, filename: string): Promise<void> {
+  const token = getAccessToken();
+  const response = await fetch(`${BASE_URL}${path}`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new ApiClientError(
+      response.status,
+      data?.error ?? 'Error',
+      data?.message ?? `Failed to download ${filename}`,
+    );
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export const invoicingApi = {
+  // ── Catalog ──────────────────────────────────────────────────
+  listCatalogItems: (params?: { page?: number; limit?: number; search?: string; kind?: CatalogItemKind; sort?: 'usage' | 'recent' | 'alpha' }) =>
+    request<PaginatedResponse<CatalogItem>>(`/invoicing/catalog/items${toQs(params)}`),
+
+  getCatalogItem: (id: string) =>
+    request<CatalogItem>(`/invoicing/catalog/items/${id}`),
+
+  createCatalogItem: (payload: { description: string; kind?: CatalogItemKind; category?: string; defaultUnit?: string; defaultUnitPrice?: number }) =>
+    request<CatalogItem>('/invoicing/catalog/items', { method: 'POST', body: JSON.stringify(payload) }),
+
+  updateCatalogItem: (id: string, payload: Partial<{ description: string; kind: CatalogItemKind; category: string | null; defaultUnit: string; defaultUnitPrice: number; isActive: boolean }>) =>
+    request<CatalogItem>(`/invoicing/catalog/items/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+
+  deleteCatalogItem: (id: string) =>
+    request<void>(`/invoicing/catalog/items/${id}`, { method: 'DELETE' }),
+
+  // ── Quotes ───────────────────────────────────────────────────
+  listQuotes: (params?: { page?: number; limit?: number; search?: string; status?: QuoteStatus }) =>
+    request<PaginatedResponse<Quote>>(`/invoicing/quotes${toQs(params)}`),
+
+  getQuote: (id: string) =>
+    request<Quote>(`/invoicing/quotes/${id}`),
+
+  createQuote: (payload: QuoteInput) =>
+    request<Quote>('/invoicing/quotes', { method: 'POST', body: JSON.stringify(payload) }),
+
+  updateQuote: (id: string, payload: Partial<QuoteInput>) =>
+    request<Quote>(`/invoicing/quotes/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+
+  deleteQuote: (id: string) =>
+    request<void>(`/invoicing/quotes/${id}`, { method: 'DELETE' }),
+
+  sendQuote: (id: string) =>
+    request<Quote>(`/invoicing/quotes/${id}/send`, { method: 'POST' }),
+
+  acceptQuote: (id: string) =>
+    request<Quote>(`/invoicing/quotes/${id}/accept`, { method: 'POST' }),
+
+  rejectQuote: (id: string, rejectionReason?: string) =>
+    request<Quote>(`/invoicing/quotes/${id}/reject`, { method: 'POST', body: JSON.stringify({ rejectionReason }) }),
+
+  convertQuoteToInvoice: (id: string, payload?: { dueDate?: string; notes?: string }) =>
+    request<Invoice>(`/invoicing/quotes/${id}/convert-to-invoice`, { method: 'POST', body: JSON.stringify(payload ?? {}) }),
+
+  downloadQuotePdf: (id: string, quoteNumber: string) =>
+    downloadPdf(`/invoicing/quotes/${id}/pdf?download=1`, `Quote-${quoteNumber}.pdf`),
+
+  // ── Invoices ─────────────────────────────────────────────────
+  listInvoices: (params?: { page?: number; limit?: number; search?: string; status?: InvoiceStatus }) =>
+    request<PaginatedResponse<Invoice>>(`/invoicing/invoices${toQs(params)}`),
+
+  getInvoice: (id: string) =>
+    request<Invoice>(`/invoicing/invoices/${id}`),
+
+  createInvoice: (payload: InvoiceInput) =>
+    request<Invoice>('/invoicing/invoices', { method: 'POST', body: JSON.stringify(payload) }),
+
+  updateInvoice: (id: string, payload: Partial<InvoiceInput>) =>
+    request<Invoice>(`/invoicing/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+
+  deleteInvoice: (id: string) =>
+    request<void>(`/invoicing/invoices/${id}`, { method: 'DELETE' }),
+
+  sendInvoice: (id: string) =>
+    request<Invoice>(`/invoicing/invoices/${id}/send`, { method: 'POST' }),
+
+  voidInvoice: (id: string, voidReason?: string) =>
+    request<Invoice>(`/invoicing/invoices/${id}/void`, { method: 'POST', body: JSON.stringify({ voidReason }) }),
+
+  downloadInvoicePdf: (id: string, invoiceNumber: string) =>
+    downloadPdf(`/invoicing/invoices/${id}/pdf?download=1`, `Invoice-${invoiceNumber}.pdf`),
+
+  // ── Payments ─────────────────────────────────────────────────
+  listPayments: (invoiceId: string) =>
+    request<Payment[]>(`/invoicing/invoices/${invoiceId}/payments`),
+
+  recordPayment: (invoiceId: string, payload: { amount: number; method: PaymentMethod; paidAt?: string; reference?: string; note?: string }) =>
+    request<{ payment: Payment; invoice: Invoice }>(`/invoicing/invoices/${invoiceId}/payments`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  deletePayment: (id: string) =>
+    request<void>(`/invoicing/payments/${id}`, { method: 'DELETE' }),
+
+  // ── Reports ──────────────────────────────────────────────────
+  getFinancialSummary: (params?: { from?: string; to?: string }) =>
+    request<FinancialSummary>(`/invoicing/reports/summary${toQs(params)}`),
+
+  getFinancialTrend: (params?: { from?: string; to?: string }) =>
+    request<FinancialTrendPoint[]>(`/invoicing/reports/trend${toQs(params)}`),
+
+  getTopCustomers: (params?: { from?: string; to?: string; limit?: number }) =>
+    request<TopCustomer[]>(`/invoicing/reports/top-customers${toQs(params)}`),
 };

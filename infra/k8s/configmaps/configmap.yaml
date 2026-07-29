@@ -16,6 +16,8 @@ data:
   FIX_JOBS_SERVICE_URL:     "http://fix-jobs:3004"
   ALERT_SERVICE_URL:        "http://alert-service:3005"
   SUBSCRIPTION_SERVICE_URL: "http://subscription-service:3007"
+  WORKSHOP_SERVICE_URL:     "http://workshop-service:3008"
+  INVOICING_SERVICE_URL:    "http://invoicing-service:3011"
 
   # ── Database connection (host only — creds come from secrets) ──
   POSTGRES_HOST: "postgres"
@@ -27,6 +29,7 @@ data:
   INSPECTION_DB_NAME:   "motacare_inspections"
   FIX_JOBS_DB_NAME:     "motacare_fixjobs"
   SUBSCRIPTION_DB_NAME: "motacare_subscriptions"
+  INVOICING_DB_NAME:    "motacare_invoicing"
 
   # ── Redis ──
   REDIS_HOST: "redis"
@@ -45,3 +48,5 @@ data:
   API_GATEWAY_PORT:          "3000"
   WEB_PORT:                  "3005"
   SUBSCRIPTION_SERVICE_PORT: "3007"
+  WORKSHOP_SERVICE_PORT:     "3008"
+  INVOICING_SERVICE_PORT:    "3011"

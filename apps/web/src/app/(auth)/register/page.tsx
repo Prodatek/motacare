@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Car, Loader2, Eye, EyeOff, Wrench, User, CheckCircle2 } from 'lucide-react';
@@ -34,6 +34,14 @@ const ROLE_CONFIG: Record<Role, {
 };
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const { setUser } = useAuth() as any;
   const router      = useRouter();
   const params      = useSearchParams();

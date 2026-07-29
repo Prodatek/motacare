@@ -16,11 +16,11 @@ export async function workshopRoutes(fastify: FastifyInstance) {
   const service = new WorkshopService();
   const ctrl    = new WorkshopController(service);
 
-  const auth       = { onRequest: [fastify.authenticate] };
-  const fixerOnly  = { onRequest: [fastify.requireRole('FIXER', 'WORKSHOP_ADMIN', 'ADMIN')] };
-  const adminOnly  = { onRequest: [fastify.requireRole('WORKSHOP_ADMIN', 'ADMIN')] };
-  const tag        = { schema: { tags: ['Workshops'], security: [{ bearerAuth: [] }] } };
-  const pubTag     = { schema: { tags: ['Workshops'] } };
+  const auth       = { onRequest: [(fastify as any).authenticate] };
+  const fixerOnly  = { onRequest: [(fastify as any).requireRole('FIXER', 'WORKSHOP_ADMIN', 'ADMIN')] };
+  const adminOnly  = { onRequest: [(fastify as any).requireRole('WORKSHOP_ADMIN', 'ADMIN')] };
+  const tag: any    = { schema: { tags: ['Workshops'], security: [{ bearerAuth: [] }] } };
+  const pubTag: any = { schema: { tags: ['Workshops'] } };
 
   // ── Public ──────────────────────────────────────────────
   fastify.get('/',               pubTag,  (req, rep) => ctrl.list(req, rep));
@@ -42,7 +42,7 @@ export async function workshopRoutes(fastify: FastifyInstance) {
   // ── Internal (no JWT — other services only) ──────────────
   fastify.get('/internal/fixer/:fixerId', (req: any, rep) => ctrl.getFixerWorkshop(req, rep));
 
-  fastify.get('/workshops/internal/stats', { schema: { hide: true } }, async (_request, reply) => {
+  fastify.get('/workshops/internal/stats', { schema: { hide: true } } as any, async (_request, reply) => {
     const { count, sql } = await import('drizzle-orm');
     const { db } = await import('../../db');
     const { workshops } = await import('../../db/schema');
@@ -66,7 +66,7 @@ export async function workshopRoutes(fastify: FastifyInstance) {
   });
  
   // Internal featured/status management endpoints (called by admin-service)
-  fastify.post('/workshops/internal/:id/featured', { schema: { hide: true } }, async (request: any, reply) => {
+  fastify.post('/workshops/internal/:id/featured', { schema: { hide: true } } as any, async (request: any, reply) => {
     const { featured } = request.body as { featured: boolean };
     const { eq } = await import('drizzle-orm');
     const { db } = await import('../../db');
@@ -75,7 +75,7 @@ export async function workshopRoutes(fastify: FastifyInstance) {
     return reply.status(200).send({ statusCode: 200, message: 'Featured status updated' });
   });
  
-  fastify.post('/workshops/internal/:id/status', { schema: { hide: true } }, async (request: any, reply) => {
+  fastify.post('/workshops/internal/:id/status', { schema: { hide: true } } as any, async (request: any, reply) => {
     const { status } = request.body as { status: 'ACTIVE' | 'SUSPENDED' };
     const { eq } = await import('drizzle-orm');
     const { db } = await import('../../db');

@@ -209,6 +209,7 @@ services:
       WORKSHOP_SERVICE_URL: http://workshop-service:3008
       ADMIN_SERVICE_URL:         http://admin-service:3009
       CRM_SERVICE_URL:           http://crm-service:3010
+      INVOICING_SERVICE_URL:     http://invoicing-service:3011
     ports:
       - '3000:3000'
     volumes:
@@ -234,7 +235,9 @@ services:
         condition: service_started
       crm-service:
         condition: service_started
-  
+      invoicing-service:
+        condition: service_started
+
   fix-jobs:
     build:
       context: .
@@ -327,6 +330,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-motacare_dev_password}
       POSTGRES_DB: ${SUBSCRIPTION_DB_NAME:-motacare_subscriptions}
       AUTH_SERVICE_URL: http://auth-service:3001
+      VEHICLE_SERVICE_URL: http://vehicle-service:3002
+      INSPECTION_SERVICE_URL: http://inspection-service:3003
       APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3005}
       # Stripe — required, service exits on boot if missing
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
@@ -457,6 +462,42 @@ services:
         condition: service_started
       fix-jobs:
         condition: service_started
+
+  # ── Invoicing Service ───────────────────────────────────────
+  invoicing-service:
+    build:
+      context: .
+      dockerfile: infra/docker/invoicing-service.Dockerfile
+      target: development
+    container_name: motacare-invoicing
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3011
+      JWT_SECRET: ${JWT_SECRET}
+      POSTGRES_HOST:     postgres
+      POSTGRES_PORT:     5432
+      POSTGRES_USER:     ${POSTGRES_USER:-motacare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-motacare_dev_password}
+      POSTGRES_DB:       ${INVOICING_DB_NAME:-motacare_invoicing}
+      WORKSHOP_SERVICE_URL: http://workshop-service:3008
+      AUTH_SERVICE_URL:     http://auth-service:3001
+      VEHICLE_SERVICE_URL:  http://vehicle-service:3002
+    ports:
+      - '3011:3011'
+    volumes:
+      - ./apps/invoicing-service:/app/apps/invoicing-service
+      - ./packages:/app/packages
+      - /app/node_modules
+      - /app/apps/invoicing-service/node_modules
+    networks:
+      - motacare-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      workshop-service:
+        condition: service_started
+
   web:
     build:
       context: .

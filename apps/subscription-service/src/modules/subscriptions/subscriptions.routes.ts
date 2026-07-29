@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { SubscriptionController } from './subscriptions.controller';
 import { SubscriptionService } from './subscriptions.service';
+import { getUserUsage } from './usage.service';
 
 export async function subscriptionRoutes(fastify: FastifyInstance) {
   const service = new SubscriptionService();
@@ -16,11 +17,16 @@ export async function subscriptionRoutes(fastify: FastifyInstance) {
 
   // Protected — authenticated users only
   fastify.get('/me',       { ...auth, ...tag }, (req, rep) => controller.getMySubscription(req, rep));
+  fastify.get('/usage', { ...auth, ...tag }, async (req, rep) => {
+    const { sub, role } = req.user as { sub: string; role: string };
+    const usage = await getUserUsage(sub, role);
+    return rep.status(200).send({ statusCode: 200, data: usage });
+  });
   fastify.post('/checkout',{ ...auth, ...tag }, (req, rep) => controller.createCheckout(req, rep));
   fastify.post('/portal',  { ...auth, ...tag }, (req, rep) => controller.createPortal(req, rep));
   fastify.post('/cancel',  { ...auth, ...tag }, (req, rep) => controller.cancel(req, rep));
 
-  fastify.get('/subscriptions/internal/stats', { schema: { hide: true } }, async (_request, reply) => {
+  fastify.get('/subscriptions/internal/stats', { schema: { hide: true } } as any, async (_request, reply) => {
     const { count, sql } = await import('drizzle-orm');
     const { db } = await import('../../db');
     const { subscriptions, PLAN_LIMITS } = await import('../../db/schema');
@@ -50,7 +56,7 @@ export async function subscriptionRoutes(fastify: FastifyInstance) {
   });
  
   // List all subscriptions (admin-service billing page)
-  fastify.get('/subscriptions/internal/subscriptions', { schema: { hide: true } }, async (request, reply) => {
+  fastify.get('/subscriptions/internal/subscriptions', { schema: { hide: true } } as any, async (request, reply) => {
     const { page = '1', limit = '25', tier } = request.query as any;
     const { eq, desc, count } = await import('drizzle-orm');
     const { db } = await import('../../db');

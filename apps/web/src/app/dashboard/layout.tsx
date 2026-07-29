@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Receipt,
   Users,
   Wrench,
   X,
@@ -31,16 +32,18 @@ const getNavItems = (role: string) => {
   if (role === 'OWNER') {
     return [
       ...base,
+      { label: 'Quotes & Invoices', href: '/dashboard/owner/invoicing', icon: Receipt },
       { label: 'Service History', href: '/dashboard/owner/history',  icon: History },
       { label: 'Subscription',    href: '/dashboard/subscription',   icon: CreditCard },
     ];
   }
- 
+
   if (role === 'FIXER' || role === 'WORKSHOP_ADMIN') {
     return [
       ...base,
-      { label: 'Customers', href: '/dashboard/crm/customers', icon: Users },
-      { label: 'Workshop',  href: '/dashboard/workshop',      icon: Building2 },
+      { label: 'Customers',         href: '/dashboard/crm/customers', icon: Users },
+      { label: 'Quotes & Invoices', href: '/dashboard/invoicing',     icon: Receipt },
+      { label: 'Workshop',          href: '/dashboard/workshop',      icon: Building2 },
     ];
   }
  

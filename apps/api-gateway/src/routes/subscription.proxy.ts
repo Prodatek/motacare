@@ -21,6 +21,9 @@ export async function registerSubscriptionProxy(fastify: FastifyInstance) {
   fastify.get('/subscriptions/me', { onRequest: [fastify.authenticate], ...tag },
     (req, rep) => proxyRequest(req, rep, `${up}/subscriptions/me`, 'GET'));
 
+  fastify.get('/subscriptions/usage', { onRequest: [fastify.authenticate], ...tag },
+    (req, rep) => proxyRequest(req, rep, `${up}/subscriptions/usage`, 'GET'));
+
   fastify.post('/subscriptions/checkout', { onRequest: [fastify.authenticate], ...tag },
     (req, rep) => proxyRequest(req, rep, `${up}/subscriptions/checkout`, 'POST'));
 
