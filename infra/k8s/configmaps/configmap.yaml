@@ -29,6 +29,8 @@ data:
   INSPECTION_DB_NAME:   "motacare_inspections"
   FIX_JOBS_DB_NAME:     "motacare_fixjobs"
   SUBSCRIPTION_DB_NAME: "motacare_subscriptions"
+  WORKSHOP_DB_NAME:     "motacare_workshops"
+  CRM_DB_NAME:          "motacare_crm"
   INVOICING_DB_NAME:    "motacare_invoicing"
 
   # ── Redis ──

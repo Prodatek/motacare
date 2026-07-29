@@ -1,5 +1,5 @@
 # ==============================================
-# MOTACARE —Admin Service Dockerfile
+# MOTACARE — Admin Service Dockerfile
 # Multi-stage: development | production
 # ==============================================
 
@@ -25,9 +25,21 @@ COPY packages/shared-types ./packages/shared-types
 COPY packages/shared-utils ./packages/shared-utils
 COPY apps/admin-service ./apps/admin-service
 
-EXPOSE 3004
+EXPOSE 3009
 
 CMD ["npm", "run", "dev", "--workspace=apps/admin-service"]
+
+# --- Builder Stage ---
+FROM base AS builder
+WORKDIR /app
+
+COPY packages/shared-types ./packages/shared-types
+COPY packages/shared-utils ./packages/shared-utils
+COPY apps/admin-service ./apps/admin-service
+
+RUN npm run build --workspace=packages/shared-types
+RUN npm run build --workspace=packages/shared-utils
+RUN npm run build --workspace=apps/admin-service
 
 # --- Production Stage ---
 FROM node:20-alpine AS production
@@ -37,13 +49,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Copy only what production needs
-COPY --from=base /app/apps/admin-service ./apps/admin-service
-COPY --from=base /app/packages/shared-types ./packages/shared-types
-COPY --from=base /app/packages/shared-utils ./packages/shared-utils
+COPY --from=builder /app/apps/admin-service/dist ./dist
+COPY --from=builder /app/apps/admin-service/package.json ./
+COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
+COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
 COPY --from=base /app/package.json ./
 COPY --from=base /app/turbo.json ./
 
-RUN npm install --workspace=apps/admin-service --workspace=packages/shared-types --workspace=packages/shared-utils --omit=dev --verbose
+RUN npm install --omit=dev
 
 # Run as non-root user for security
 RUN addgroup --system --gid 1001 nodejs
@@ -52,4 +65,4 @@ USER motacare
 
 EXPOSE 3009
 
-CMD ["npm", "run", "dev", "--workspace=apps/admin-service"]
+CMD ["node", "dist/main.js"]

@@ -100,13 +100,13 @@ data:
     CREATE DATABASE motacare_fixjobs;
     CREATE DATABASE motacare_subscriptions;
     CREATE DATABASE motacare_invoicing;
+    CREATE DATABASE motacare_workshops;
+    CREATE DATABASE motacare_crm;
     GRANT ALL PRIVILEGES ON DATABASE motacare_auth TO motacare;
     GRANT ALL PRIVILEGES ON DATABASE motacare_vehicles TO motacare;
     GRANT ALL PRIVILEGES ON DATABASE motacare_inspections TO motacare;
     GRANT ALL PRIVILEGES ON DATABASE motacare_fixjobs TO motacare;
     GRANT ALL PRIVILEGES ON DATABASE motacare_subscriptions TO motacare;
     GRANT ALL PRIVILEGES ON DATABASE motacare_invoicing TO motacare;
-    -- NOTE: motacare_workshops and motacare_crm are also missing here —
-    -- pre-existing gap from before this k8s config was kept in sync with
-    -- docker-compose.yml. Not added as part of this change; flagged for
-    -- a separate pass if workshop-service/crm-service are deployed to k8s.
+    GRANT ALL PRIVILEGES ON DATABASE motacare_workshops TO motacare;
+    GRANT ALL PRIVILEGES ON DATABASE motacare_crm TO motacare;

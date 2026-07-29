@@ -29,6 +29,18 @@ EXPOSE 3004
 
 CMD ["npm", "run", "dev", "--workspace=apps/fix-jobs"]
 
+# --- Builder Stage ---
+FROM base AS builder
+WORKDIR /app
+
+COPY packages/shared-types ./packages/shared-types
+COPY packages/shared-utils ./packages/shared-utils
+COPY apps/fix-jobs ./apps/fix-jobs
+
+RUN npm run build --workspace=packages/shared-types
+RUN npm run build --workspace=packages/shared-utils
+RUN npm run build --workspace=apps/fix-jobs
+
 # --- Production Stage ---
 FROM node:20-alpine AS production
 RUN apk add --no-cache libc6-compat
@@ -37,13 +49,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Copy only what production needs
-COPY --from=base /app/apps/fix-jobs ./apps/fix-jobs
-COPY --from=base /app/packages/shared-types ./packages/shared-types
-COPY --from=base /app/packages/shared-utils ./packages/shared-utils
+COPY --from=builder /app/apps/fix-jobs/dist ./dist
+COPY --from=builder /app/apps/fix-jobs/package.json ./
+COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
+COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
 COPY --from=base /app/package.json ./
 COPY --from=base /app/turbo.json ./
 
-RUN npm install --workspace=apps/fix-jobs --workspace=packages/shared-types --workspace=packages/shared-utils --omit=dev --verbose
+RUN npm install --omit=dev
 
 # Run as non-root user for security
 RUN addgroup --system --gid 1001 nodejs
@@ -52,4 +65,4 @@ USER motacare
 
 EXPOSE 3004
 
-CMD ["npm", "run", "dev", "--workspace=apps/fix-jobs"]
+CMD ["node", "dist/main.js"]

@@ -115,6 +115,36 @@ spec:
                   name: motacare-config
                   key: INVOICING_DB_NAME
 
+        - name: migrate-workshop
+          image: ghcr.io/Prodatek/motacare/workshop-service:latest
+          command: ["node", "dist/db/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: motacare-config
+            - secretRef:
+                name: motacare-secrets
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: motacare-config
+                  key: WORKSHOP_DB_NAME
+
+        - name: migrate-crm
+          image: ghcr.io/Prodatek/motacare/crm-service:latest
+          command: ["node", "dist/db/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: motacare-config
+            - secretRef:
+                name: motacare-secrets
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: motacare-config
+                  key: CRM_DB_NAME
+
       # The main container just exits 0 once all initContainers succeed
       containers:
         - name: done
