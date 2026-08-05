@@ -33,6 +33,7 @@ export const updateWorkshopSchema = z.object({
   phone:       z.string().max(20).nullable().optional(),
   email:       z.string().email().nullable().optional(),
   specialties: z.array(z.enum(SPECIALTIES)).min(1).max(6).optional(),
+  logoUrl:     z.string().url().max(500).nullable().optional(),
 });
 
 // ============================================================

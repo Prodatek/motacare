@@ -6,6 +6,7 @@ import {
   Wrench, Users, ClipboardCheck, TrendingUp, Star,
   CheckCircle2, Clock, AlertCircle, Plus, Loader2,
   ArrowRight, ChevronRight, X, LogOut, DollarSign, Eye,
+  ImageOff, Save,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { workshopApi, ApiClientError } from '@/lib/api';
@@ -338,7 +339,72 @@ function FixerWorkshopView({ workshop, memberId }: { workshop: Workshop; memberI
 
 // ── WORKSHOP ADMIN VIEW ──────────────────────────────────────
 
-function WorkshopAdminView({ workshop }: { workshop: Workshop }) {
+function BrandingSettings({ workshop, onSaved }: { workshop: Workshop; onSaved: (w: Workshop) => void }) {
+  const [logoUrl, setLogoUrl] = useState(workshop.logoUrl ?? '');
+  const [isSaving, setIsSaving] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
+  const dirty = logoUrl !== (workshop.logoUrl ?? '');
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const updated = await workshopApi.update(workshop.id, { logoUrl: logoUrl.trim() || null });
+      onSaved(updated);
+      toast.success('Branding updated');
+    } catch (e) {
+      if (e instanceof ApiClientError) toast.error(e.message);
+      else toast.error('Failed to update branding');
+    } finally { setIsSaving(false); }
+  };
+
+  return (
+    <div className="card p-6 mb-6">
+      <h2 className="font-semibold text-gray-900 mb-1">Branding</h2>
+      <p className="text-sm text-gray-500 mb-4">
+        Your logo appears on quote and invoice PDFs sent to customers.
+      </p>
+      <div className="flex items-start gap-4">
+        <div className="h-16 w-16 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden shrink-0">
+          {logoUrl && !imgFailed ? (
+            <img
+              src={logoUrl}
+              alt="Workshop logo"
+              className="h-full w-full object-contain"
+              onError={() => setImgFailed(true)}
+              onLoad={() => setImgFailed(false)}
+            />
+          ) : (
+            <ImageOff className="h-6 w-6 text-gray-300" />
+          )}
+        </div>
+        <div className="flex-1">
+          <label className="block text-xs font-medium text-gray-500 mb-1">Logo URL</label>
+          <input
+            type="url"
+            value={logoUrl}
+            onChange={(e) => { setLogoUrl(e.target.value); setImgFailed(false); }}
+            placeholder="https://example.com/logo.png"
+            className="input"
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Paste a link to an already-hosted image (PNG/JPG). Leave blank to remove your logo.
+          </p>
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={!dirty || isSaving}
+          className="btn-primary text-sm shrink-0 mt-5"
+        >
+          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function WorkshopAdminView({ workshop: initialWorkshop }: { workshop: Workshop }) {
+  const [workshop, setWorkshop] = useState(initialWorkshop);
   const [stats, setStats] = useState<WorkshopStats | null>(null);
   const [pending, setPending] = useState<WorkshopMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -374,6 +440,8 @@ function WorkshopAdminView({ workshop }: { workshop: Workshop }) {
         <h1 className="text-2xl font-bold text-gray-900">{workshop.name}</h1>
         <p className="text-gray-500 text-sm mt-0.5">{workshop.city}, {workshop.state} · Workshop Admin</p>
       </div>
+
+      <BrandingSettings workshop={workshop} onSaved={setWorkshop} />
 
       {isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">

@@ -1,4 +1,4 @@
-import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
 
 // ============================================================
 // SHARED QUOTE/INVOICE PDF LAYOUT
@@ -29,6 +29,9 @@ export interface WorkshopBranding {
   state?: string | null;
   phone?: string | null;
   email?: string | null;
+  // Pre-fetched and inlined as a data URI by pdf.service.tsx — never a
+  // raw remote URL here, so rendering never depends on a live fetch.
+  logoDataUri?: string;
 }
 
 export interface DocumentData {
@@ -59,7 +62,10 @@ export interface DocumentData {
 
 const styles = StyleSheet.create({
   page: { padding: 36, fontSize: 10, fontFamily: 'Helvetica', color: '#1f2937' },
+  topBar: { height: 6, backgroundColor: '#dc2626', marginHorizontal: -36, marginTop: -36, marginBottom: 24 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
+  workshopBlock: { flexDirection: 'row', alignItems: 'flex-start' },
+  logo: { width: 44, height: 44, marginRight: 12, objectFit: 'contain' },
   workshopName: { fontSize: 16, fontWeight: 700, marginBottom: 4 },
   muted: { color: '#6b7280' },
   docTitle: { fontSize: 20, fontWeight: 700, textAlign: 'right', marginBottom: 4 },
@@ -128,15 +134,19 @@ export function DocumentLayout({ data }: { data: DocumentData }) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
+        <View style={styles.topBar} fixed />
         <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.workshopName}>{workshop.name}</Text>
-            {workshop.address ? <Text style={styles.muted}>{workshop.address}</Text> : null}
-            {(workshop.city || workshop.state) ? (
-              <Text style={styles.muted}>{[workshop.city, workshop.state].filter(Boolean).join(', ')}</Text>
-            ) : null}
-            {workshop.phone ? <Text style={styles.muted}>{workshop.phone}</Text> : null}
-            {workshop.email ? <Text style={styles.muted}>{workshop.email}</Text> : null}
+          <View style={styles.workshopBlock}>
+            {workshop.logoDataUri ? <Image src={workshop.logoDataUri} style={styles.logo} /> : null}
+            <View>
+              <Text style={styles.workshopName}>{workshop.name}</Text>
+              {workshop.address ? <Text style={styles.muted}>{workshop.address}</Text> : null}
+              {(workshop.city || workshop.state) ? (
+                <Text style={styles.muted}>{[workshop.city, workshop.state].filter(Boolean).join(', ')}</Text>
+              ) : null}
+              {workshop.phone ? <Text style={styles.muted}>{workshop.phone}</Text> : null}
+              {workshop.email ? <Text style={styles.muted}>{workshop.email}</Text> : null}
+            </View>
           </View>
           <View>
             <Text style={styles.docTitle}>{data.kind === 'QUOTE' ? 'QUOTE' : 'INVOICE'}</Text>

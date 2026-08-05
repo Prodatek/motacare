@@ -16,6 +16,25 @@ import type { WorkshopBranding } from './templates/DocumentLayout';
 const quotesService = new QuotesService();
 const invoicesService = new InvoicesService();
 
+// Fetches the logo image bytes ourselves and inlines them as a data URI,
+// rather than letting @react-pdf/renderer's <Image> fetch the URL directly
+// at render time — a slow/unreachable/non-image logoUrl would otherwise
+// throw mid-render and take the whole PDF down with it. Any failure here
+// just means the PDF renders without a logo, never a broken document.
+async function fetchLogoDataUri(logoUrl: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(logoUrl, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return undefined;
+    const contentType = res.headers.get('content-type') ?? '';
+    if (!contentType.startsWith('image/')) return undefined;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.byteLength === 0 || buffer.byteLength > 2_000_000) return undefined; // sanity cap: 2MB
+    return `data:${contentType};base64,${buffer.toString('base64')}`;
+  } catch {
+    return undefined;
+  }
+}
+
 async function fetchWorkshopBranding(workshopId: string): Promise<WorkshopBranding> {
   try {
     const res = await fetch(`${env.WORKSHOP_SERVICE_URL}/workshops/${workshopId}`, {
@@ -24,6 +43,7 @@ async function fetchWorkshopBranding(workshopId: string): Promise<WorkshopBrandi
     if (!res.ok) return { name: 'Workshop' };
     const body = (await res.json()) as { data: any };
     const w = body.data;
+    const logoDataUri = w?.logoUrl ? await fetchLogoDataUri(w.logoUrl) : undefined;
     return {
       name: w?.name ?? 'Workshop',
       address: w?.address ?? null,
@@ -31,6 +51,7 @@ async function fetchWorkshopBranding(workshopId: string): Promise<WorkshopBrandi
       state: w?.state ?? null,
       phone: w?.phone ?? null,
       email: w?.email ?? null,
+      logoDataUri,
     };
   } catch {
     return { name: 'Workshop' };

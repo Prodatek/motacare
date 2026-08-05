@@ -565,6 +565,7 @@ export const workshopApi = {
   update: (id: string, payload: Partial<{
     name: string; description: string; address: string;
     city: string; state: string; phone: string; email: string; specialties: string[];
+    logoUrl: string | null;
   }>) =>
     request<Workshop>(`/workshops/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 
