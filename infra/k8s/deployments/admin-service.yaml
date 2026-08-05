@@ -1,33 +1,33 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: invoicing-service
+  name: admin-service
   namespace: motacare
   labels:
-    app: invoicing-service
+    app: admin-service
     version: "1.0.0"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: invoicing-service
+      app: admin-service
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
-      maxUnavailable: 0    # zero-downtime — always keep existing pods up during rollout
+      maxUnavailable: 0
   template:
     metadata:
       labels:
-        app: invoicing-service
+        app: admin-service
     spec:
       terminationGracePeriodSeconds: 30
       containers:
-        - name: invoicing-service
-          image: REPLACE_WITH_ECR_URI/motacare-invoicing-service:latest
+        - name: admin-service
+          image: REPLACE_WITH_ECR_URI/motacare-admin-service:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 3011
+            - containerPort: 3009
           envFrom:
             - configMapRef:
                 name: motacare-config
@@ -35,12 +35,7 @@ spec:
                 name: motacare-secrets
           env:
             - name: PORT
-              value: "3011"
-            - name: POSTGRES_DB
-              valueFrom:
-                configMapKeyRef:
-                  name: motacare-config
-                  key: INVOICING_DB_NAME
+              value: "3009"
           resources:
             requests:
               cpu: 100m
@@ -51,14 +46,14 @@ spec:
           readinessProbe:
             httpGet:
               path: /health
-              port: 3011
+              port: 3009
             initialDelaySeconds: 10
             periodSeconds: 5
             failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /health
-              port: 3011
+              port: 3009
             initialDelaySeconds: 20
             periodSeconds: 15
             failureThreshold: 3
@@ -67,11 +62,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: invoicing-service
+  name: admin-service
   namespace: motacare
 spec:
   selector:
-    app: invoicing-service
+    app: admin-service
   ports:
-    - port: 3011
-      targetPort: 3011
+    - port: 3009
+      targetPort: 3009

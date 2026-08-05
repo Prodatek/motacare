@@ -39,7 +39,7 @@ async function buildServer() {
 
   await fastify.register(fastifyHelmet, { contentSecurityPolicy: false });
   await fastify.register(fastifyCors, {
-    origin: env.NODE_ENV === 'production' ? ['https://app.motacare.ng'] : true,
+    origin: env.NODE_ENV === 'production' ? ['https://motacare.buildspecs.io'] : true,
   });
   await fastify.register(fastifyRateLimit, { max: 100, timeWindow: '1 minute' });
   await fastify.register(fastifyJwt, { secret: env.JWT_SECRET });

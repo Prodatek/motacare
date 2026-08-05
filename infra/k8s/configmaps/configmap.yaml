@@ -17,6 +17,8 @@ data:
   ALERT_SERVICE_URL:        "http://alert-service:3005"
   SUBSCRIPTION_SERVICE_URL: "http://subscription-service:3007"
   WORKSHOP_SERVICE_URL:     "http://workshop-service:3008"
+  ADMIN_SERVICE_URL:        "http://admin-service:3009"
+  CRM_SERVICE_URL:          "http://crm-service:3010"
   INVOICING_SERVICE_URL:    "http://invoicing-service:3011"
 
   # ── Database connection (host only — creds come from secrets) ──
@@ -37,9 +39,14 @@ data:
   REDIS_HOST: "redis"
   REDIS_PORT: "6379"
 
-  # ── Public URLs — update these to your actual domains ──
-  APP_URL:              "https://app.motacare.ng"
-  NEXT_PUBLIC_API_URL:  "https://api.motacare.ng"
+  # ── Public URL — single domain, web is the only public entry point ──
+  APP_URL: "https://motacare.buildspecs.io"
+  # IMPORTANT: this is the INTERNAL cluster URL, not a public one. It's
+  # read server-side by apps/web/next.config.js to build the /api/:path*
+  # rewrite destination — the browser only ever calls the same-origin
+  # /api path; Next.js's own server proxies that to the gateway inside
+  # the cluster. There is no public api.* domain in this deploy.
+  NEXT_PUBLIC_API_URL: "http://api-gateway:3000"
 
   # ── Ports ──
   AUTH_SERVICE_PORT:         "3001"
@@ -51,4 +58,10 @@ data:
   WEB_PORT:                  "3005"
   SUBSCRIPTION_SERVICE_PORT: "3007"
   WORKSHOP_SERVICE_PORT:     "3008"
+  ADMIN_SERVICE_PORT:        "3009"
+  CRM_SERVICE_PORT:          "3010"
   INVOICING_SERVICE_PORT:    "3011"
+
+  # ── Public domain (single-domain deploy — web is the only public entry point) ──
+  PUBLIC_DOMAIN: "motacare.buildspecs.io"
+  ALLOWED_ORIGINS: "https://motacare.buildspecs.io"

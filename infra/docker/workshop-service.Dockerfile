@@ -1,5 +1,5 @@
 # ==============================================
-# MOTACARE — Alert Service Dockerfile
+# MOTACARE — Workshop Service Dockerfile
 # ==============================================
 
 FROM node:20-alpine AS base
@@ -20,7 +20,7 @@ COPY packages/shared-types ./packages/shared-types
 COPY packages/shared-utils ./packages/shared-utils
 COPY apps/workshop-service ./apps/workshop-service
 COPY tsconfig.base.json ./
-EXPOSE 3005
+EXPOSE 3008
 CMD ["npm", "run", "dev", "--workspace=apps/workshop-service"]
 
 FROM base AS builder
@@ -52,5 +52,5 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 motacare
 USER motacare
 
-EXPOSE 3005
+EXPOSE 3008
 CMD ["node", "dist/main.js"]

@@ -33,7 +33,7 @@ async function buildServer() {
   await fastify.register(fastifyHelmet, { contentSecurityPolicy: false });
   await fastify.register(fastifyCors, {
     origin: env.NODE_ENV === 'production'
-      ? ['https://app.motacare.ng']
+      ? ['https://motacare.buildspecs.io']
       : true,
     credentials: true,
   });

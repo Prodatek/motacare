@@ -9,7 +9,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: api-gateway
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 8
   metrics:
     - type: Resource
@@ -37,7 +37,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: web
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 6
   metrics:
     - type: Resource
@@ -59,7 +59,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: auth-service
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 4
   metrics:
     - type: Resource
@@ -81,7 +81,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: vehicle-service
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 4
   metrics:
     - type: Resource
@@ -103,7 +103,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: inspection-service
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 4
   metrics:
     - type: Resource
@@ -125,7 +125,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: invoicing-service
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 4
   metrics:
     - type: Resource

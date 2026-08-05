@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+#   cp terraform.tfvars.example terraform.tfvars
+
+region             = "us-east-1"
+project            = "motacare"
+domain             = "motacare.buildspecs.io"
+github_repository  = "Prodatek/motacare"   # "org/repo" allowed to deploy via GitHub Actions OIDC
+letsencrypt_email  = "devops@motacare.buildspecs.io"
+
+# Cost dials — smaller/fewer = cheaper. Defaults are already small.
+node_instance_types = ["t3.medium"]
+node_desired_size   = 2
+node_min_size       = 1
+node_max_size       = 3

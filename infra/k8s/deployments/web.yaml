@@ -6,7 +6,7 @@ metadata:
   labels:
     app: web
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: web
@@ -23,7 +23,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: web
-          image: ghcr.io/Prodatek/motacare/web:latest
+          image: REPLACE_WITH_ECR_URI/motacare-web:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3005

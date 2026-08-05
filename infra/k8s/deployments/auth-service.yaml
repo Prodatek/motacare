@@ -7,7 +7,7 @@ metadata:
     app: auth-service
     version: "1.0.0"
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: auth-service
@@ -24,7 +24,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: auth-service
-          image: ghcr.io/Prodatek/motacare/auth-service:latest
+          image: REPLACE_WITH_ECR_URI/motacare-auth-service:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3001

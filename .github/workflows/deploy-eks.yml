@@ -1,0 +1,232 @@
+name: Deploy to EKS
+
+# ============================================================
+# The ONE deployment pipeline. Builds every service's
+# target:production image, pushes to ECR, then rolls out to the
+# AWS EKS cluster provisioned by infra/terraform/ — running
+# database migrations automatically before every rollout.
+#
+# docker-compose.yml is local-dev only; it is never used to deploy.
+# ============================================================
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip tests (emergency deploy only)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  AWS_REGION: us-east-1
+  EKS_CLUSTER_NAME: motacare-eks
+  ECR_PREFIX: motacare
+  NAMESPACE: motacare
+
+permissions:
+  id-token: write   # required for AWS OIDC
+  contents: read
+
+jobs:
+
+  # ──────────────────────────────────────────────────────────
+  # JOB 1: TEST GATE
+  # ──────────────────────────────────────────────────────────
+  test:
+    name: Test Gate
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.skip_tests != true }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Build shared packages
+        run: |
+          npm run build --workspace=packages/shared-types
+          npm run build --workspace=packages/shared-utils
+
+      - name: Lint + typecheck (build) every workspace
+        run: |
+          npm run lint
+          npm run build
+
+      - name: Run tests
+        run: npm run test
+        env:
+          NODE_ENV: test
+          JWT_SECRET: test-secret-minimum-32-characters-long
+          VEHICLE_HASH_SECRET: test-hash-secret-minimum-32-chars-long
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: '5432'
+
+  # ──────────────────────────────────────────────────────────
+  # JOB 2: BUILD & PUSH ALL IMAGES TO ECR
+  # ──────────────────────────────────────────────────────────
+  build-and-push:
+    name: Build & Push — ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: test
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    strategy:
+      matrix:
+        service:
+          - auth-service
+          - vehicle-service
+          - inspection-service
+          - fix-jobs
+          - alert-service
+          - subscription-service
+          - workshop-service
+          - admin-service
+          - crm-service
+          - invoicing-service
+          - api-gateway
+          - web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr-login
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/${{ matrix.service }}.Dockerfile
+          target: production
+          push: true
+          tags: |
+            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_PREFIX }}-${{ matrix.service }}:${{ github.sha }}
+            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_PREFIX }}-${{ matrix.service }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  # ──────────────────────────────────────────────────────────
+  # JOB 3: DEPLOY TO EKS — migrations run automatically, every time
+  # ──────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to EKS
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: needs.build-and-push.result == 'success'
+    environment:
+      name: production
+      url: https://motacare.buildspecs.io
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr-login
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+
+      - name: Apply namespace, config, secrets
+        run: |
+          kubectl apply -f infra/k8s/namespaces/namespace.yaml
+          kubectl apply -f infra/k8s/configmaps/configmap.yaml
+          kubectl create secret generic motacare-secrets -n ${{ env.NAMESPACE }} \
+            --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            --from-literal=VEHICLE_HASH_SECRET="${{ secrets.VEHICLE_HASH_SECRET }}" \
+            --from-literal=POSTGRES_USER="${{ secrets.POSTGRES_USER }}" \
+            --from-literal=POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}" \
+            --from-literal=STRIPE_SECRET_KEY="${{ secrets.STRIPE_SECRET_KEY }}" \
+            --from-literal=STRIPE_WEBHOOK_SECRET="${{ secrets.STRIPE_WEBHOOK_SECRET }}" \
+            --from-literal=STRIPE_PRICE_PRO_MONTHLY="${{ secrets.STRIPE_PRICE_PRO_MONTHLY }}" \
+            --from-literal=STRIPE_PRICE_PRO_YEARLY="${{ secrets.STRIPE_PRICE_PRO_YEARLY }}" \
+            --from-literal=STRIPE_PRICE_WORKSHOP_MONTHLY="${{ secrets.STRIPE_PRICE_WORKSHOP_MONTHLY }}" \
+            --from-literal=STRIPE_PRICE_WORKSHOP_YEARLY="${{ secrets.STRIPE_PRICE_WORKSHOP_YEARLY }}" \
+            --from-literal=SMTP_HOST="${{ secrets.SMTP_HOST }}" \
+            --from-literal=SMTP_PORT="${{ secrets.SMTP_PORT }}" \
+            --from-literal=SMTP_USER="${{ secrets.SMTP_USER }}" \
+            --from-literal=SMTP_PASS="${{ secrets.SMTP_PASS }}" \
+            --from-literal=EMAIL_FROM="${{ secrets.EMAIL_FROM }}" \
+            --from-literal=EMAIL_FROM_NAME="${{ secrets.EMAIL_FROM_NAME }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Postgres + Redis (first deploy only — no-op if already running)
+        run: |
+          kubectl apply -f infra/k8s/statefulsets/postgres.yaml
+          kubectl apply -f infra/k8s/statefulsets/redis.yaml
+          kubectl rollout status statefulset/postgres -n ${{ env.NAMESPACE }} --timeout=180s
+          kubectl rollout status statefulset/redis -n ${{ env.NAMESPACE }} --timeout=60s
+
+      - name: Run database migrations
+        run: |
+          REGISTRY="${{ steps.ecr-login.outputs.registry }}"
+          # Rewrite ghcr.io/Prodatek/motacare/<service>:latest -> <ECR
+          # registry>/motacare-<service>:<sha> — the migration Job's
+          # placeholder images use the old GHCR path/naming, ECR repos
+          # are one-per-service with a hyphen, not a nested path.
+          sed -E "s#ghcr\.io/Prodatek/motacare/([a-z-]+):latest#${REGISTRY}/${{ env.ECR_PREFIX }}-\1:${{ github.sha }}#g" \
+            infra/k8s/jobs/db-migrations.yaml > /tmp/db-migrations.yaml
+
+          kubectl delete job motacare-migrations -n ${{ env.NAMESPACE }} --ignore-not-found
+          kubectl apply -f /tmp/db-migrations.yaml
+          echo "Waiting for migrations to complete..."
+          if ! kubectl wait --for=condition=complete job/motacare-migrations -n ${{ env.NAMESPACE }} --timeout=180s; then
+            echo "::error::Migrations failed — aborting deploy, nothing rolls forward."
+            kubectl logs -l job-name=motacare-migrations -n ${{ env.NAMESPACE }} --tail=100
+            exit 1
+          fi
+
+      - name: Deploy all services
+        run: |
+          REGISTRY="${{ steps.ecr-login.outputs.registry }}"
+          kubectl apply -f infra/k8s/deployments/
+
+          for svc in auth-service vehicle-service inspection-service fix-jobs alert-service \
+                     subscription-service workshop-service admin-service crm-service \
+                     invoicing-service api-gateway web; do
+            kubectl set image deployment/$svc $svc="${REGISTRY}/${{ env.ECR_PREFIX }}-${svc}:${{ github.sha }}" -n ${{ env.NAMESPACE }}
+          done
+
+          kubectl apply -f infra/k8s/hpa/hpa.yaml
+          kubectl apply -f infra/k8s/ingress/ingress.yaml
+
+      - name: Wait for rollout
+        run: |
+          FAILED=0
+          for svc in auth-service vehicle-service inspection-service fix-jobs alert-service \
+                     subscription-service workshop-service admin-service crm-service \
+                     invoicing-service api-gateway web; do
+            if ! kubectl rollout status deployment/$svc -n ${{ env.NAMESPACE }} --timeout=180s; then
+              echo "::warning::$svc rollout did not complete in time"
+              FAILED=$((FAILED + 1))
+            fi
+          done
+          if [ $FAILED -gt 0 ]; then
+            echo "::error::$FAILED deployment(s) failed to roll out"
+            exit 1
+          fi
+
+      - name: Status
+        if: always()
+        run: |
+          kubectl get pods -n ${{ env.NAMESPACE }}
+          kubectl get ingress -n ${{ env.NAMESPACE }}
