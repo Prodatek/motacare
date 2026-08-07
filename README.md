@@ -34,6 +34,9 @@ motacare/
 
 ## 🚀 Getting Started (Local Development)
 
+> Deploying this to production? See [`DEPLOY.md`](DEPLOY.md) — `docker-compose` below is local dev only.
+
+
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) >= 20.0.0
