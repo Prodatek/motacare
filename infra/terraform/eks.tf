@@ -33,6 +33,14 @@ module "eks" {
 
   eks_managed_node_groups = {
     default = {
+      # AWS has been retiring AL2-based EKS-optimized AMIs in favor of
+      # AL2023 — without this, the module's default ami_type can request
+      # an AL2 AMI that AWS no longer publishes for newer/recent
+      # Kubernetes minor versions, which fails node group creation with
+      # "Requested AMI for this version <x> is not supported". Pinning
+      # AL2023 explicitly avoids depending on the module's default.
+      ami_type = "AL2023_x86_64_STANDARD"
+
       instance_types = var.node_instance_types
       capacity_type  = "ON_DEMAND"
 

@@ -17,6 +17,14 @@ variable "domain" {
 }
 
 variable "kubernetes_version" {
+  # If node group creation fails with "Requested AMI for this version
+  # <x> is not supported", this version has likely aged out of AWS's
+  # standard EKS support window (each version gets ~14 months before
+  # falling into paid extended support, at which point new node groups
+  # may need it explicitly opted in). Check what's currently available
+  # with: aws eks describe-cluster-versions --query
+  # 'clusterVersions[?clusterVersionPolicy==`STANDARD`].clusterVersion'
+  # and bump this to a version from that list.
   description = "EKS control plane version"
   type        = string
   default     = "1.30"
