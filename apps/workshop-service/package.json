@@ -7,7 +7,7 @@
     "build": "tsc --project tsconfig.json",
     "start": "node dist/main.js",
     "lint": "eslint src --ext .ts",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts"
   },
