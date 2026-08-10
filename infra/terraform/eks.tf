@@ -1,3 +1,27 @@
+locals {
+  # EKS access entries need the underlying IAM user/role ARN, not an
+  # STS assumed-role session ARN (arn:aws:sts::ACCOUNT:assumed-role/ROLE/SESSION)
+  # — which is what aws_caller_identity returns when you're authenticated
+  # via an assumed role (e.g. SSO). IAM user ARNs are already in the
+  # right form and need no lookup.
+  caller_arn              = data.aws_caller_identity.current.arn
+  caller_is_assumed_role   = can(regex("^arn:aws:sts::[0-9]+:assumed-role/", local.caller_arn))
+  caller_assumed_role_name = local.caller_is_assumed_role ? regex("assumed-role/([^/]+)/", local.caller_arn)[0] : null
+}
+
+# Looked up by name (via the real IAM API) rather than string-building
+# the ARN — SSO and other assumed roles often live under a path
+# (e.g. role/aws-reserved/sso.amazonaws.com/...) that isn't visible in
+# the STS assumed-role ARN, so guessing the ARN shape would be wrong.
+data "aws_iam_role" "caller" {
+  count = local.caller_is_assumed_role ? 1 : 0
+  name  = local.caller_assumed_role_name
+}
+
+locals {
+  caller_principal_arn = local.caller_is_assumed_role ? data.aws_iam_role.caller[0].arn : local.caller_arn
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.0"
@@ -14,14 +38,29 @@ module "eks" {
 
   # Modern EKS access control (not the legacy aws-auth configmap) —
   # grants the GitHub Actions deploy role cluster-admin so
-  # deploy-eks.yml can kubectl apply/rollout everything. Your own
-  # IAM user/role needs an access entry too if you'll run kubectl
-  # locally — add it here once you know which IAM identity that is.
+  # deploy-eks.yml can kubectl apply/rollout everything.
   authentication_mode = "API_AND_CONFIG_MAP"
 
   access_entries = {
     github_actions_deploy = {
       principal_arn = aws_iam_role.github_actions_deploy.arn
+      policy_associations = {
+        admin = {
+          policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = { type = "cluster" }
+        }
+      }
+    }
+
+    # Whoever runs `terraform apply`/`terraform destroy` locally needs
+    # this too — under the access-entry system, the IAM identity that
+    # creates the cluster is NOT automatically granted access (that's
+    # only true of the legacy aws-auth path). Without this, the
+    # kubernetes/helm providers get "Unauthorized" the moment they try
+    # to create anything (see addons.tf), since they authenticate as
+    # this same local identity via `aws eks get-token`.
+    terraform_operator = {
+      principal_arn = local.caller_principal_arn
       policy_associations = {
         admin = {
           policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
