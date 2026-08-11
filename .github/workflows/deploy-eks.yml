@@ -98,6 +98,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Fails with a clear message instead of AWS's opaque "Source Account
+      # ID is needed..." error if AWS_DEPLOY_ROLE_ARN isn't a full ARN
+      # (e.g. quotes/whitespace baked in from a copy-paste, or just the
+      # bare role name) -- doesn't echo the secret itself, only a
+      # true/false shape check, so nothing sensitive hits the log.
+      - name: Validate AWS_DEPLOY_ROLE_ARN shape
+        run: |
+          if [[ "${{ secrets.AWS_DEPLOY_ROLE_ARN }}" != arn:aws:iam::*:role/* ]]; then
+            echo "::error::AWS_DEPLOY_ROLE_ARN is not a full role ARN (expected to start with arn:aws:iam::<account-id>:role/). Got a value of length ${#AWS_DEPLOY_ROLE_ARN_CHECK} chars — check for stray quotes/whitespace, and check Settings > Environments for a shadowing environment-level secret."
+            exit 1
+          fi
+          echo "AWS_DEPLOY_ROLE_ARN shape OK"
+        env:
+          AWS_DEPLOY_ROLE_ARN_CHECK: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
@@ -134,6 +149,21 @@ jobs:
       url: https://motacare.buildspecs.io
     steps:
       - uses: actions/checkout@v4
+
+      # Fails with a clear message instead of AWS's opaque "Source Account
+      # ID is needed..." error if AWS_DEPLOY_ROLE_ARN isn't a full ARN
+      # (e.g. quotes/whitespace baked in from a copy-paste, or just the
+      # bare role name) -- doesn't echo the secret itself, only a
+      # true/false shape check, so nothing sensitive hits the log.
+      - name: Validate AWS_DEPLOY_ROLE_ARN shape
+        run: |
+          if [[ "${{ secrets.AWS_DEPLOY_ROLE_ARN }}" != arn:aws:iam::*:role/* ]]; then
+            echo "::error::AWS_DEPLOY_ROLE_ARN is not a full role ARN (expected to start with arn:aws:iam::<account-id>:role/). Got a value of length ${#AWS_DEPLOY_ROLE_ARN_CHECK} chars — check for stray quotes/whitespace, and check Settings > Environments for a shadowing environment-level secret."
+            exit 1
+          fi
+          echo "AWS_DEPLOY_ROLE_ARN shape OK"
+        env:
+          AWS_DEPLOY_ROLE_ARN_CHECK: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
