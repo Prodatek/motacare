@@ -140,7 +140,10 @@ spec:
 
         - name: migrate-invoicing
           image: ghcr.io/Prodatek/motacare/invoicing-service:latest
-          command: ["node", "dist/db/migrate.js"]
+          # invoicing-service's image keeps dist nested at its real
+          # apps/invoicing-service/... path (not flattened like the
+          # other services) — see invoicing-service.Dockerfile.
+          command: ["node", "apps/invoicing-service/dist/db/migrate.js"]
           resources:
             requests:
               cpu: 100m
@@ -184,7 +187,10 @@ spec:
 
         - name: migrate-crm
           image: ghcr.io/Prodatek/motacare/crm-service:latest
-          command: ["node", "dist/db/migrate.js"]
+          # crm-service's image keeps dist nested at its real
+          # apps/crm-service/... path (not flattened like the other
+          # services) — see crm-service.Dockerfile.
+          command: ["node", "apps/crm-service/dist/db/migrate.js"]
           resources:
             requests:
               cpu: 100m
