@@ -61,9 +61,17 @@ COPY --from=builder /app/apps/crm-service/package.json ./apps/crm-service/
 
 RUN npm install --workspace=apps/crm-service --workspace=packages/shared-types --workspace=packages/shared-utils --omit=dev
 
-# Compiled output — dist stays flattened to /app/dist to match CMD below.
-COPY --from=builder /app/apps/crm-service/dist ./dist
-COPY --from=builder /app/apps/crm-service/drizzle ./drizzle
+# Compiled output — kept at its real nested path (NOT flattened to
+# /app/dist like the other services). crm-service pins an older
+# drizzle-orm (^0.30.10) that conflicts with the root package.json's own
+# drizzle-orm (^0.45.2), so npm nests crm-service's own copy at
+# apps/crm-service/node_modules rather than hoisting it to
+# /app/node_modules. Node's module resolution only finds that nested
+# copy by walking up from the file's real directory — flattening dist
+# to /app/dist would put migrate.js outside that ancestor chain
+# entirely, causing "Cannot find module 'drizzle-orm/node-postgres'".
+COPY --from=builder /app/apps/crm-service/dist ./apps/crm-service/dist
+COPY --from=builder /app/apps/crm-service/drizzle ./apps/crm-service/drizzle
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
 
@@ -74,4 +82,4 @@ USER motacare
 
 EXPOSE 3010
 
-CMD ["node", "dist/main.js"]
+CMD ["node", "apps/crm-service/dist/main.js"]

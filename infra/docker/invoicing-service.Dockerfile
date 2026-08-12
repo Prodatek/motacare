@@ -61,9 +61,17 @@ COPY --from=builder /app/apps/invoicing-service/package.json ./apps/invoicing-se
 
 RUN npm install --workspace=apps/invoicing-service --workspace=packages/shared-types --workspace=packages/shared-utils --omit=dev
 
-# Compiled output — dist stays flattened to /app/dist to match CMD below.
-COPY --from=builder /app/apps/invoicing-service/dist ./dist
-COPY --from=builder /app/apps/invoicing-service/drizzle ./drizzle
+# Compiled output — kept at its real nested path (NOT flattened to
+# /app/dist like the other services). invoicing-service pins an older
+# drizzle-orm (^0.30.10) that conflicts with the root package.json's own
+# drizzle-orm (^0.45.2), so npm nests invoicing-service's own copy at
+# apps/invoicing-service/node_modules rather than hoisting it to
+# /app/node_modules. Node's module resolution only finds that nested
+# copy by walking up from the file's real directory — flattening dist
+# to /app/dist would put migrate.js outside that ancestor chain
+# entirely, causing "Cannot find module 'drizzle-orm/node-postgres'".
+COPY --from=builder /app/apps/invoicing-service/dist ./apps/invoicing-service/dist
+COPY --from=builder /app/apps/invoicing-service/drizzle ./apps/invoicing-service/drizzle
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
 
@@ -74,4 +82,4 @@ USER motacare
 
 EXPOSE 3011
 
-CMD ["node", "dist/main.js"]
+CMD ["node", "apps/invoicing-service/dist/main.js"]
