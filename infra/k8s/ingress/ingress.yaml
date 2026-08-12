@@ -64,14 +64,13 @@ metadata:
     # Body size — allow inspection photo uploads up to 20MB
     nginx.ingress.kubernetes.io/proxy-body-size: "20m"
 
-    # Next.js needs WebSocket support for HMR (harmless in prod)
+    # WebSocket upgrades are proxied natively by ingress-nginx once this
+    # is set — no configuration-snippet needed. (Security headers are
+    # already set at the app layer in apps/web/next.config.js; recent
+    # ingress-nginx versions block configuration-snippet by default
+    # since it allows arbitrary nginx config injection, so don't
+    # reintroduce it here just to duplicate headers Next.js already sends.)
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection "upgrade";
-      add_header X-Frame-Options "SAMEORIGIN" always;
-      add_header X-Content-Type-Options "nosniff" always;
-      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     # Redirect www → apex (harmless if no www CNAME exists)
     nginx.ingress.kubernetes.io/from-to-www-redirect: "true"
