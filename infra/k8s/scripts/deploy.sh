@@ -61,6 +61,7 @@ success "Config and secrets applied"
 
 # ── Step 2: Databases ────────────────────────────────────────
 info "Step 2/6 — Starting Postgres/Redis (no-op if already running)..."
+kubectl apply -f "$K8S_DIR/storageclass/storageclass.yaml"
 kubectl apply -f "$K8S_DIR/statefulsets/postgres.yaml"
 kubectl apply -f "$K8S_DIR/statefulsets/redis.yaml"
 kubectl rollout status statefulset/postgres -n "$NAMESPACE" --timeout=120s

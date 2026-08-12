@@ -36,6 +36,17 @@ module "eks" {
 
   enable_irsa = true
 
+  # Kubernetes removed the in-tree AWS EBS volume provisioner years ago
+  # (CSI migration) — without this addon, the postgres/redis StatefulSets'
+  # volumeClaimTemplates have no provisioner to service them, so their
+  # PVCs stay Pending forever and the pods never schedule. This is what
+  # was causing `kubectl rollout status` to time out waiting for 1 pod.
+  cluster_addons = {
+    aws-ebs-csi-driver = {
+      service_account_role_arn = module.ebs_csi_irsa_role.iam_role_arn
+    }
+  }
+
   # Modern EKS access control (not the legacy aws-auth configmap) —
   # grants the GitHub Actions deploy role cluster-admin so
   # deploy-eks.yml can kubectl apply/rollout everything.
@@ -88,6 +99,30 @@ module "eks" {
       desired_size = var.node_desired_size
 
       subnet_ids = module.vpc.private_subnets
+    }
+  }
+
+  tags = {
+    Project = var.project
+  }
+}
+
+# IRSA role the EBS CSI driver's controller pod assumes to call the EC2
+# API (CreateVolume/AttachVolume/etc). Declared after module.eks because
+# it needs the cluster's OIDC provider, which only exists once the
+# cluster does — but cluster_addons above still references its output,
+# which Terraform resolves fine via the dependency graph either way.
+module "ebs_csi_irsa_role" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.20"
+
+  role_name             = "${var.project}-ebs-csi"
+  attach_ebs_csi_policy = true
+
+  oidc_providers = {
+    main = {
+      provider_arn               = module.eks.oidc_provider_arn
+      namespace_service_accounts = ["kube-system:ebs-csi-controller-sa"]
     }
   }
 

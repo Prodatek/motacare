@@ -201,6 +201,7 @@ jobs:
 
       - name: Postgres + Redis (first deploy only — no-op if already running)
         run: |
+          kubectl apply -f infra/k8s/storageclass/storageclass.yaml
           kubectl apply -f infra/k8s/statefulsets/postgres.yaml
           kubectl apply -f infra/k8s/statefulsets/redis.yaml
           kubectl rollout status statefulset/postgres -n ${{ env.NAMESPACE }} --timeout=180s
