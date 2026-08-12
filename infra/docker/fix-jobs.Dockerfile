@@ -63,6 +63,7 @@ RUN npm install --workspace=apps/fix-jobs --workspace=packages/shared-types --wo
 
 # Compiled output — dist stays flattened to /app/dist to match CMD below.
 COPY --from=builder /app/apps/fix-jobs/dist ./dist
+COPY --from=builder /app/apps/fix-jobs/drizzle ./drizzle
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
 

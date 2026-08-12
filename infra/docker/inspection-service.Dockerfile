@@ -63,6 +63,7 @@ RUN npm install --workspace=apps/inspection-service --workspace=packages/shared-
 
 # Compiled output — dist stays flattened to /app/dist to match CMD below.
 COPY --from=builder /app/apps/inspection-service/dist ./dist
+COPY --from=builder /app/apps/inspection-service/drizzle ./drizzle
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
 

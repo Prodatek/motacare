@@ -56,6 +56,7 @@ RUN npm install --workspace=apps/workshop-service --workspace=packages/shared-ty
 
 # Compiled output — dist stays flattened to /app/dist to match CMD below.
 COPY --from=builder /app/apps/workshop-service/dist ./dist
+COPY --from=builder /app/apps/workshop-service/drizzle ./drizzle
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
 RUN addgroup --system --gid 1001 nodejs

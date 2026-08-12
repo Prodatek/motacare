@@ -63,6 +63,7 @@ RUN npm install --workspace=apps/invoicing-service --workspace=packages/shared-t
 
 # Compiled output — dist stays flattened to /app/dist to match CMD below.
 COPY --from=builder /app/apps/invoicing-service/dist ./dist
+COPY --from=builder /app/apps/invoicing-service/drizzle ./drizzle
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
 
