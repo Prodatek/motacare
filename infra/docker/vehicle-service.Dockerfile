@@ -48,15 +48,23 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Copy only what production needs
+# npm needs the real workspace layout to resolve @motacare/shared-types
+# and @motacare/shared-utils (private workspace packages, never published
+# to any registry) and to install vehicle-service's actual runtime dependencies —
+# the previous approach flattened everything to a single package.json
+# with no workspace context, so `npm install` silently installed almost
+# none of this service's real dependencies (e.g. pg, drizzle-orm).
+COPY --from=base /app/package.json /app/turbo.json ./
+COPY --from=builder /app/packages/shared-types/package.json ./packages/shared-types/
+COPY --from=builder /app/packages/shared-utils/package.json ./packages/shared-utils/
+COPY --from=builder /app/apps/vehicle-service/package.json ./apps/vehicle-service/
+
+RUN npm install --workspace=apps/vehicle-service --workspace=packages/shared-types --workspace=packages/shared-utils --omit=dev
+
+# Compiled output — dist stays flattened to /app/dist to match CMD below.
 COPY --from=builder /app/apps/vehicle-service/dist ./dist
-COPY --from=builder /app/apps/vehicle-service/package.json ./
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
-COPY --from=base /app/package.json ./
-COPY --from=base /app/turbo.json ./
-
-RUN npm install --omit=dev
 
 # Run as non-root user for security
 RUN addgroup --system --gid 1001 nodejs

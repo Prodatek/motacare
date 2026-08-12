@@ -39,15 +39,25 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY --from=builder /app/apps/alert-service/dist ./dist
 COPY --from=builder /app/tsconfig.base.json ./
-COPY --from=builder /app/apps/alert-service/package.json ./
+
+# npm needs the real workspace layout to resolve @motacare/shared-types
+# and @motacare/shared-utils (private workspace packages, never published
+# to any registry) and to install alert-service's actual runtime
+# dependencies — the previous approach flattened everything to a single
+# package.json with no workspace context, so `npm install` silently
+# installed almost none of this service's real dependencies.
+COPY --from=base /app/package.json /app/turbo.json ./
+COPY --from=builder /app/packages/shared-types/package.json ./packages/shared-types/
+COPY --from=builder /app/packages/shared-utils/package.json ./packages/shared-utils/
+COPY --from=builder /app/apps/alert-service/package.json ./apps/alert-service/
+
+RUN npm install --workspace=apps/alert-service --workspace=packages/shared-types --workspace=packages/shared-utils --omit=dev
+
+# Compiled output — dist stays flattened to /app/dist to match CMD below.
+COPY --from=builder /app/apps/alert-service/dist ./dist
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder /app/packages/shared-utils/dist ./packages/shared-utils/dist
-COPY --from=base /app/package.json ./
-COPY --from=base /app/turbo.json ./
-
-RUN npm install --omit=dev
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 motacare
 USER motacare
