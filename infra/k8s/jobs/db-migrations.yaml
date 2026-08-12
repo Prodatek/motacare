@@ -28,6 +28,13 @@ spec:
         - name: migrate-auth
           image: ghcr.io/Prodatek/motacare/auth-service:latest
           command: ["node", "dist/db/migrate.js"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
           envFrom:
             - configMapRef:
                 name: motacare-config
@@ -43,6 +50,13 @@ spec:
         - name: migrate-vehicles
           image: ghcr.io/Prodatek/motacare/vehicle-service:latest
           command: ["node", "dist/db/migrate.js"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
           envFrom:
             - configMapRef:
                 name: motacare-config
@@ -58,6 +72,13 @@ spec:
         - name: migrate-inspections
           image: ghcr.io/Prodatek/motacare/inspection-service:latest
           command: ["node", "dist/db/migrate.js"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
           envFrom:
             - configMapRef:
                 name: motacare-config
@@ -73,6 +94,13 @@ spec:
         - name: migrate-fix-jobs
           image: ghcr.io/Prodatek/motacare/fix-jobs:latest
           command: ["node", "dist/db/migrate.js"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
           envFrom:
             - configMapRef:
                 name: motacare-config
@@ -88,6 +116,13 @@ spec:
         - name: migrate-subscriptions
           image: ghcr.io/Prodatek/motacare/subscription-service:latest
           command: ["node", "dist/db/migrate.js"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
           envFrom:
             - configMapRef:
                 name: motacare-config
@@ -103,6 +138,13 @@ spec:
         - name: migrate-invoicing
           image: ghcr.io/Prodatek/motacare/invoicing-service:latest
           command: ["node", "dist/db/migrate.js"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
           envFrom:
             - configMapRef:
                 name: motacare-config
@@ -118,6 +160,13 @@ spec:
         - name: migrate-workshop
           image: ghcr.io/Prodatek/motacare/workshop-service:latest
           command: ["node", "dist/db/migrate.js"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
           envFrom:
             - configMapRef:
                 name: motacare-config
@@ -133,6 +182,13 @@ spec:
         - name: migrate-crm
           image: ghcr.io/Prodatek/motacare/crm-service:latest
           command: ["node", "dist/db/migrate.js"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
           envFrom:
             - configMapRef:
                 name: motacare-config
@@ -150,3 +206,10 @@ spec:
         - name: done
           image: alpine:3.18
           command: ["echo", "All migrations complete"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
