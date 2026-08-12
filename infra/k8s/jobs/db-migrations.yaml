@@ -15,10 +15,13 @@ metadata:
   name: motacare-migrations
   namespace: motacare
   annotations:
-    # Deletes the job 5 minutes after completion
+    # Deletes the job an hour after completion — long enough to inspect
+    # `kubectl describe job` / pod logs after a CI failure before the
+    # evidence disappears. (Was 300s — too short to catch a failure
+    # between the CI run ending and a human getting to a terminal.)
     "batch.kubernetes.io/job-tracking": "true"
 spec:
-  ttlSecondsAfterFinished: 300
+  ttlSecondsAfterFinished: 3600
   backoffLimit: 2
   template:
     spec:

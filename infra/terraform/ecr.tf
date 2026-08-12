@@ -4,6 +4,13 @@ resource "aws_ecr_repository" "service" {
   name                 = "${var.project}-${each.value}"
   image_tag_mutability = "MUTABLE"
 
+  # Without this, `terraform destroy` fails on every repo that still has
+  # images in it (AWS only allows deleting empty ECR repos by default) —
+  # and every repo here will have images after any real deploy. This is
+  # a cost-control deployment meant to be destroyed between uses, so
+  # destroy needs to actually succeed unattended.
+  force_delete = true
+
   image_scanning_configuration {
     scan_on_push = true
   }
