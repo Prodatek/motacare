@@ -220,7 +220,13 @@ jobs:
           kubectl delete job motacare-migrations -n ${{ env.NAMESPACE }} --ignore-not-found
           kubectl apply -f /tmp/db-migrations.yaml
           echo "Waiting for migrations to complete..."
-          if ! kubectl wait --for=condition=complete job/motacare-migrations -n ${{ env.NAMESPACE }} --timeout=180s; then
+          # 8 initContainers run sequentially, each pulling its own image
+          # before it can even start — on a node that has never pulled
+          # these images before (e.g. right after a fresh cluster/node
+          # group comes up), that alone can eat well over 180s before any
+          # migration logic even runs. 600s covers a cold node; once
+          # images are cached, this finishes in a fraction of that.
+          if ! kubectl wait --for=condition=complete job/motacare-migrations -n ${{ env.NAMESPACE }} --timeout=600s; then
             echo "::error::Migrations failed — aborting deploy, nothing rolls forward."
             kubectl logs -l job-name=motacare-migrations -n ${{ env.NAMESPACE }} --tail=100
             exit 1

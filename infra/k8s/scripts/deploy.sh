@@ -77,9 +77,9 @@ sed -E "s#ghcr\.io/Prodatek/motacare/([a-z-]+):latest#${REGISTRY}/${ECR_PREFIX}-
 kubectl delete job motacare-migrations -n "$NAMESPACE" --ignore-not-found
 kubectl apply -f /tmp/motacare-db-migrations.yaml
 
-info "Waiting for migrations to complete (up to 3 min)..."
+info "Waiting for migrations to complete (up to 10 min on a cold node)..."
 if kubectl wait --for=condition=complete job/motacare-migrations \
-    -n "$NAMESPACE" --timeout=180s 2>/dev/null; then
+    -n "$NAMESPACE" --timeout=600s 2>/dev/null; then
   success "Migrations complete"
 else
   warn "Migration job may have failed — checking logs..."
